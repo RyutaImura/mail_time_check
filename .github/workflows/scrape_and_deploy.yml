@@ -35,6 +35,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          ref: master  # masterブランチを明示的に指定
 
       - name: Pythonをセットアップ
         uses: actions/setup-python@v4
