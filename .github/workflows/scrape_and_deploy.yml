@@ -23,6 +23,7 @@ env:
   LOGIN_URL: 'https://apollo-scedure77.net/LOGIN/'
   USERNAME: 'imurayap33'
   PASSWORD: 'imimp0633'
+  TZ: 'Asia/Tokyo'  # タイムゾーンを日本時間に設定
 
 jobs:
   scrape:
@@ -55,19 +56,20 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           echo "手動実行モード: ${{ github.event.inputs.duration }}分間、3分ごとに実行します"
+          echo "現在の日本時間: $(date '+%Y-%m-%d %H:%M:%S')"
           start_time=$(date +%s)
           end_time=$((start_time + ${{ github.event.inputs.duration }} * 60))
           current_time=$(date +%s)
           
           while [ $current_time -lt $end_time ]; do
-            echo "スクレイピング実行: $(date)"
+            echo "スクレイピング実行: $(date '+%Y-%m-%d %H:%M:%S')"
             python mail_time_check.py
             
             echo "変更をコミット"
             git config --global user.name "github-actions"
             git config --global user.email "github-actions@github.com"
             git add -A
-            git diff --quiet && git diff --staged --quiet || git commit -m "スクレイピング結果を更新: $(date +%Y-%m-%d_%H:%M:%S)" && git push
+            git diff --quiet && git diff --staged --quiet || git commit -m "スクレイピング結果を更新: $(date '+%Y-%m-%d %H:%M:%S JST')" && git push
             
             echo "3分間スリープ"
             sleep 180
@@ -76,17 +78,19 @@ jobs:
 
       - name: スケジュール実行の場合は1回だけ実行
         if: github.event_name == 'schedule'
-        run: python mail_time_check.py
+        run: |
+          echo "現在の日本時間: $(date '+%Y-%m-%d %H:%M:%S')"
+          python mail_time_check.py
         timeout-minutes: 15  # タイムアウト設定
 
       - name: スケジュール実行時の変更をコミット
         if: github.event_name == 'schedule'
         run: |
-          echo "スクリプト実行完了時間: $(date)" >> execution_log.txt
+          echo "スクリプト実行完了時間: $(date '+%Y-%m-%d %H:%M:%S JST')" >> execution_log.txt
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "スクレイピング結果を更新: $(date +%Y-%m-%d_%H:%M:%S)"
+          git diff --quiet && git diff --staged --quiet || git commit -m "スクレイピング結果を更新: $(date '+%Y-%m-%d %H:%M:%S JST')"
           git push
 
   deploy:
@@ -106,7 +110,7 @@ jobs:
           publish-dir: "./"
           production-branch: "master"  # mainからmasterに変更
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "GitHub Actionsからの自動デプロイ: $(date +%Y-%m-%d_%H:%M:%S)"
+          deploy-message: "GitHub Actionsからの自動デプロイ: $(date '+%Y-%m-%d %H:%M:%S JST')"
           netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           netlify-site-id: ${{ secrets.NETLIFY_SITE_ID }}
         env:

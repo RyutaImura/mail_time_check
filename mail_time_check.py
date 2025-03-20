@@ -39,7 +39,7 @@ if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 # 現在の日付をログファイル名に使用
-current_date = datetime.now().strftime('%Y%m%d')
+current_date = datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y%m%d')
 log_file = os.path.join(log_dir, f'mail_time_check_{current_date}.log')
 
 # ロガーの設定
@@ -70,6 +70,9 @@ logger.addHandler(console_handler)
 logger.handlers = []
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
+# 日本のタイムゾーンを設定
+JST = pytz.timezone('Asia/Tokyo')
 
 def is_github_actions():
     """
@@ -459,13 +462,17 @@ def extract_contact_time(driver, url):
         logger.error(f"連絡可能時間の抽出処理中にエラーが発生: {str(e)}")
         return "不明"
 
+def current_time_jst():
+    """日本時間の現在時刻を返す"""
+    return datetime.now(JST)
+
 def generate_html_report(data_list, start_year, start_month):
     """
     連絡可能時間ごとに分類したHTMLレポートを生成します
     """
     try:
-        # 現在の日時を取得
-        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 現在の日時を取得 (日本時間)
+        current_datetime = current_time_jst().strftime('%Y-%m-%d %H:%M:%S')
         
         # 終了年月を計算
         end_month = start_month + 2
@@ -477,27 +484,28 @@ def generate_html_report(data_list, start_year, start_month):
         # レポートのタイトル
         report_title = f"{start_year}年{start_month}月～{end_year}年{end_month}月"
         
+        # レポートのタイトルを設定
+        month_names = {
+            1: '1月', 2: '2月', 3: '3月', 4: '4月', 5: '5月', 6: '6月',
+            7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'
+        }
+        
         # 時間帯のリスト（表示順序を定義）
-        time_slots = [
-            '不明',
-            'いつでも可能',
-            '10時から11時',
-            '11時から12時',
-            '12時から13時',
-            '13時から14時',
-            '14時から15時',
-            '15時から16時',
-            '16時から17時',
-            '17時から18時',
-            '18時から19時',
-            '19時から20時'
-        ]
-        
-        # 時間帯ごとにデータを分類
-        categorized_data = {slot: [] for slot in time_slots}
-        
-        # その他の時間帯用
-        categorized_data['その他'] = []
+        time_slots = {
+            "不明": [],
+            "いつでも可能": [],
+            "10時_to_11時": [],
+            "11時_to_12時": [],
+            "12時_to_13時": [],
+            "13時_to_14時": [],
+            "14時_to_15時": [],
+            "15時_to_16時": [],
+            "16時_to_17時": [],
+            "17時_to_18時": [],
+            "18時_to_19時": [],
+            "19時_to_20時": [],
+            "その他": []
+        }
         
         # データを分類
         for data in data_list:
@@ -505,10 +513,10 @@ def generate_html_report(data_list, start_year, start_month):
             
             # 定義された時間帯に一致するか確認
             if contact_time in time_slots:
-                categorized_data[contact_time].append(data)
+                time_slots[contact_time].append(data)
             else:
                 # 定義されていない時間帯はその他に分類
-                categorized_data['その他'].append(data)
+                time_slots['その他'].append(data)
         
         # HTMLを生成
         html_content = f"""
@@ -517,7 +525,7 @@ def generate_html_report(data_list, start_year, start_month):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>連絡可能時間リスト - {report_title}</title>
+            <title>{report_title}</title>
             <style>
                 body {{
                     font-family: 'Meiryo', 'Hiragino Kaku Gothic ProN', sans-serif;
@@ -650,7 +658,7 @@ def generate_html_report(data_list, start_year, start_month):
         </head>
         <body>
             <div class="container">
-                <h1>連絡可能時間リスト - {report_title}</h1>
+                <h1>{report_title}</h1>
                 <p>生成日時: {current_datetime}</p>
                 
                 <div class="controls">
@@ -667,8 +675,8 @@ def generate_html_report(data_list, start_year, start_month):
         """
         
         # 各時間帯のHTMLを生成
-        for time_slot in time_slots + ['その他']:
-            slot_data = categorized_data[time_slot]
+        for time_slot in time_slots:
+            slot_data = time_slots[time_slot]
             slot_id = time_slot.replace(' ', '_').replace('から', '_to_')
             
             html_content += f"""
@@ -809,7 +817,7 @@ def generate_html_report(data_list, start_year, start_month):
         """
         
         # HTMLファイルを保存
-        output_file = 'index.html'
+        output_file = f'{start_year}_{start_month}_連絡可能時間リスト.html'
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
@@ -843,10 +851,15 @@ def main():
                 start_year = int(sys.argv[1])
                 start_month = int(sys.argv[2])
             else:
-                # デフォルトは現在の年月
-                now = datetime.now()
+                # デフォルトは現在の年月（日本時間で取得）
+                now = current_time_jst()
                 start_year = now.year
                 start_month = now.month
+            
+            logger.info(f"対象年月: {start_year}年{start_month}月")
+            print(f"\n{'='*50}")
+            print(f"対象年月: {start_year}年{start_month}月の処理を開始")
+            print(f"{'='*50}")
             
             # 全ての抽出データを格納するリスト
             all_extracted_data = []
