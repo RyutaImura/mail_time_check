@@ -654,24 +654,105 @@ def generate_html_report(data_list, start_year, start_month):
                 .restore-btn:hover {{
                     background-color: #218838;
                 }}
+                /* ログイン関連のスタイル */
+                #login-overlay {{
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.7);
+                    z-index: 1000;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }}
+                .login-box {{
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    width: 300px;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                }}
+                .login-box h2 {{
+                    margin-top: 0;
+                    margin-bottom: 20px;
+                    text-align: center;
+                }}
+                .form-group {{
+                    margin-bottom: 15px;
+                }}
+                .form-group label {{
+                    display: block;
+                    margin-bottom: 5px;
+                    font-weight: bold;
+                }}
+                .form-group input {{
+                    width: 100%;
+                    padding: 8px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    box-sizing: border-box;
+                }}
+                #login-btn {{
+                    width: 100%;
+                    padding: 10px;
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 16px;
+                }}
+                #login-btn:hover {{
+                    background-color: #45a049;
+                }}
+                #error-message {{
+                    color: red;
+                    text-align: center;
+                    margin-bottom: 15px;
+                    display: none;
+                }}
+                #content-container {{
+                    display: none;
+                }}
             </style>
         </head>
         <body>
-            <div class="container">
-                <h1>{report_title}</h1>
-                <p>生成日時: {current_datetime}</p>
-                
-                <div class="controls">
-                    <div class="global-actions">
-                        <button id="delete-selected" class="global-btn">選択項目を削除</button>
-                        <button id="select-all" class="global-btn">すべて選択</button>
-                        <button id="deselect-all" class="global-btn">選択解除</button>
-                        <button id="restore-all" class="global-btn restore-btn">すべて復元</button>
+            <!-- ログインオーバーレイ -->
+            <div id="login-overlay">
+                <div class="login-box">
+                    <h2>ログイン</h2>
+                    <div id="error-message">ユーザー名またはパスワードが違います</div>
+                    <div class="form-group">
+                        <label for="username">ユーザー名:</label>
+                        <input type="text" id="username" required>
                     </div>
-                    <div class="status">
-                        選択: <span id="selected-count">0</span> 件
+                    <div class="form-group">
+                        <label for="password">パスワード:</label>
+                        <input type="password" id="password" required>
                     </div>
+                    <button id="login-btn">ログイン</button>
                 </div>
+            </div>
+
+            <!-- メインコンテンツ -->
+            <div id="content-container">
+                <div class="container">
+                    <h1>{report_title}</h1>
+                    <p>生成日時: {current_datetime}</p>
+                    
+                    <div class="controls">
+                        <div class="global-actions">
+                            <button id="delete-selected" class="global-btn">選択項目を削除</button>
+                            <button id="select-all" class="global-btn">すべて選択</button>
+                            <button id="deselect-all" class="global-btn">選択解除</button>
+                            <button id="restore-all" class="global-btn restore-btn">すべて復元</button>
+                        </div>
+                        <div class="status">
+                            選択: <span id="selected-count">0</span> 件
+                        </div>
+                    </div>
         """
         
         # 各時間帯のHTMLを生成
@@ -723,10 +804,58 @@ def generate_html_report(data_list, start_year, start_month):
             """
         
         html_content += """
+                </div>
             </div>
             
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
+                    // ログイン処理
+                    const loginOverlay = document.getElementById('login-overlay');
+                    const contentContainer = document.getElementById('content-container');
+                    const loginBtn = document.getElementById('login-btn');
+                    const errorMessage = document.getElementById('error-message');
+                    const usernameInput = document.getElementById('username');
+                    const passwordInput = document.getElementById('password');
+                    
+                    // ローカルストレージから認証状態をチェック
+                    const isAuthenticated = localStorage.getItem('isAuthenticated');
+                    if (isAuthenticated === 'true') {
+                        loginOverlay.style.display = 'none';
+                        contentContainer.style.display = 'block';
+                    }
+                    
+                    // ログインボタンのクリックイベント
+                    loginBtn.addEventListener('click', function() {
+                        const username = usernameInput.value;
+                        const password = passwordInput.value;
+                        
+                        if (username === 'ya' && password === 'abc12345') {
+                            // 認証成功
+                            localStorage.setItem('isAuthenticated', 'true');
+                            loginOverlay.style.display = 'none';
+                            contentContainer.style.display = 'block';
+                        } else {
+                            // 認証失敗
+                            errorMessage.style.display = 'block';
+                            passwordInput.value = '';
+                        }
+                    });
+                    
+                    // Enter キーでログインを実行
+                    passwordInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            loginBtn.click();
+                        }
+                    });
+                    
+                    // ログアウト機能（コンソールからアクセス可能）
+                    window.logOut = function() {
+                        localStorage.removeItem('isAuthenticated');
+                        loginOverlay.style.display = 'flex';
+                        contentContainer.style.display = 'none';
+                    };
+                    
+                    // データ操作機能
                     // チェックボックス変更時のイベント
                     document.querySelectorAll('.checkbox').forEach(checkbox => {
                         checkbox.addEventListener('change', updateSelectedCount);
