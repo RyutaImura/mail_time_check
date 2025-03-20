@@ -817,8 +817,8 @@ def generate_html_report(data_list, start_year, start_month):
                     const usernameInput = document.getElementById('username');
                     const passwordInput = document.getElementById('password');
                     
-                    // ローカルストレージから認証状態をチェック
-                    const isAuthenticated = localStorage.getItem('isAuthenticated');
+                    // セッションストレージから認証状態をチェック
+                    const isAuthenticated = sessionStorage.getItem('isAuthenticated');
                     if (isAuthenticated === 'true') {
                         loginOverlay.style.display = 'none';
                         contentContainer.style.display = 'block';
@@ -831,7 +831,7 @@ def generate_html_report(data_list, start_year, start_month):
                         
                         if (username === 'ya' && password === 'abc12345') {
                             // 認証成功
-                            localStorage.setItem('isAuthenticated', 'true');
+                            sessionStorage.setItem('isAuthenticated', 'true');
                             loginOverlay.style.display = 'none';
                             contentContainer.style.display = 'block';
                         } else {
@@ -850,7 +850,7 @@ def generate_html_report(data_list, start_year, start_month):
                     
                     // ログアウト機能（コンソールからアクセス可能）
                     window.logOut = function() {
-                        localStorage.removeItem('isAuthenticated');
+                        sessionStorage.removeItem('isAuthenticated');
                         loginOverlay.style.display = 'flex';
                         contentContainer.style.display = 'none';
                     };
