@@ -63,13 +63,13 @@ jobs:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v3
         with:
-          ref: main  # メインブランチから最新の状態を取得
+          ref: master  # mainからmasterに変更
 
       - name: Netlifyにデプロイ
         uses: nwtgck/actions-netlify@v2
         with:
           publish-dir: "./"
-          production-branch: "main"
+          production-branch: "master"  # mainからmasterに変更
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deploy-message: "GitHub Actionsからの自動デプロイ: $(date +%Y-%m-%d_%H:%M:%S)"
           netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
