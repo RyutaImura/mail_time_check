@@ -219,7 +219,7 @@
             <div id="content-container">
                 <div class="container">
                     <h1>2025年3月～2025年5月</h1>
-                    <p>生成日時: 2025-03-20 21:08:01</p>
+                    <p>生成日時: 2025-03-20 21:18:27</p>
                     
                     <div class="controls">
                         <div class="global-actions">
@@ -768,8 +768,8 @@
                     const usernameInput = document.getElementById('username');
                     const passwordInput = document.getElementById('password');
                     
-                    // ローカルストレージから認証状態をチェック
-                    const isAuthenticated = localStorage.getItem('isAuthenticated');
+                    // セッションストレージから認証状態をチェック
+                    const isAuthenticated = sessionStorage.getItem('isAuthenticated');
                     if (isAuthenticated === 'true') {
                         loginOverlay.style.display = 'none';
                         contentContainer.style.display = 'block';
@@ -782,7 +782,7 @@
                         
                         if (username === 'ya' && password === 'abc12345') {
                             // 認証成功
-                            localStorage.setItem('isAuthenticated', 'true');
+                            sessionStorage.setItem('isAuthenticated', 'true');
                             loginOverlay.style.display = 'none';
                             contentContainer.style.display = 'block';
                         } else {
@@ -801,7 +801,7 @@
                     
                     // ログアウト機能（コンソールからアクセス可能）
                     window.logOut = function() {
-                        localStorage.removeItem('isAuthenticated');
+                        sessionStorage.removeItem('isAuthenticated');
                         loginOverlay.style.display = 'flex';
                         contentContainer.style.display = 'none';
                     };
