@@ -525,7 +525,7 @@ def generate_html_report(data_list, start_year, start_month):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{report_title}</title>
+            <title>連絡可能時間リスト - {report_title}</title>
             <style>
                 body {{
                     font-family: 'Meiryo', 'Hiragino Kaku Gothic ProN', sans-serif;
@@ -817,7 +817,7 @@ def generate_html_report(data_list, start_year, start_month):
         """
         
         # HTMLファイルを保存
-        output_file = f'{start_year}_{start_month}_連絡可能時間リスト.html'
+        output_file = 'index.html'
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
