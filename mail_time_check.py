@@ -703,7 +703,7 @@ def generate_html_report(data_list, start_year, start_month):
         """
         
         # HTMLファイルを保存
-        output_file = f'架電リスト.html'
+        output_file = 'index.html'
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
