@@ -6,10 +6,11 @@ on:
   workflow_dispatch:  # 手動実行用
 
 env:
-  BASE_URL: ${{ secrets.BASE_URL }}
-  LOGIN_URL: ${{ secrets.LOGIN_URL }}
-  USERNAME: ${{ secrets.USERNAME }}
-  PASSWORD: ${{ secrets.PASSWORD }}
+  # 環境変数を明示的に設定
+  BASE_URL: 'https://apollo-scedure77.net'
+  LOGIN_URL: 'https://apollo-scedure77.net/LOGIN/'
+  USERNAME: 'imurayap33'
+  PASSWORD: 'imimp0633'
 
 jobs:
   scrape:

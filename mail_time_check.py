@@ -188,6 +188,8 @@ def auto_login(driver):
             account_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "account"))
             )
+            # 手動で入力値をクリアしてから入力（JavaScriptを使用）
+            driver.execute_script("arguments[0].value = '';", account_input)
             account_input.send_keys(username)
             logger.info("ユーザー名を入力しました")
             
@@ -196,8 +198,13 @@ def auto_login(driver):
             pass_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "pass"))
             )
+            # 手動で入力値をクリアしてから入力（JavaScriptを使用）
+            driver.execute_script("arguments[0].value = '';", pass_input)
             pass_input.send_keys(password)
             logger.info("パスワードを入力しました")
+            
+            # ヒューマンらしい動作を追加（少し待機）
+            time.sleep(1.5)
             
             logger.info("ログインボタンを検索中...")
             # ログインボタンをクリック
@@ -205,7 +212,8 @@ def auto_login(driver):
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'p.login > input[name="Submit"]'))
             )
             logger.info("ログインボタンが見つかりました: クリックします")
-            login_button.click()
+            # 通常のクリックではなく、JavaScriptでイベントを発火
+            driver.execute_script("arguments[0].click();", login_button)
             logger.info("ログインボタンをクリックしました")
             
             # ログイン後の待機
@@ -214,6 +222,14 @@ def auto_login(driver):
             # ログイン後の状態確認
             logger.info(f"ログイン後のURL: {driver.current_url}")
             logger.info(f"ログイン後のタイトル: {driver.title}")
+            
+            # 直接ホームページに移動を試みる（ログイン後のリダイレクトが失敗している場合）
+            if "LOGIN" in driver.current_url.upper():
+                logger.info("ログイン後もLOGINページにいます。直接ホームページへアクセスを試みます")
+                driver.get(f"{BASE_URL}/index.html")
+                time.sleep(5)
+                logger.info(f"手動リダイレクト後のURL: {driver.current_url}")
+                logger.info(f"手動リダイレクト後のタイトル: {driver.title}")
             
             # ログイン成功の確認（複数の方法で試行）
             try:
