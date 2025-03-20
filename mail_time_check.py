@@ -721,111 +721,93 @@ def main():
     メイン処理
     """
     try:
-        while True:
-            logger.info("====== メール時間チェックの処理を開始 ======")
-            process_start_time = time.time()
+        logger.info("====== メール時間チェックの処理を開始 ======")
+        process_start_time = time.time()
+        
+        driver = None
+        try:
+            # WebDriverの初期化
+            driver = setup_driver()
             
-            driver = None
-            try:
-                # WebDriverの初期化
-                driver = setup_driver()
+            # ログイン処理
+            auto_login(driver)
+            
+            # 現在の年月を取得（または引数から取得）
+            if len(sys.argv) >= 3:
+                start_year = int(sys.argv[1])
+                start_month = int(sys.argv[2])
+            else:
+                # デフォルトは現在の年月
+                now = datetime.now()
+                start_year = now.year
+                start_month = now.month
+            
+            # 全ての抽出データを格納するリスト
+            all_extracted_data = []
+            
+            # 現在の月から2ヶ月後までをループ
+            for i in range(3):  # 0, 1, 2 の3ヶ月分
+                # 対象年月を計算
+                target_month = start_month + i
+                target_year = start_year
                 
-                # ログイン処理
-                auto_login(driver)
+                # 月が12を超える場合は年を繰り上げ
+                if target_month > 12:
+                    target_month -= 12
+                    target_year += 1
                 
-                # 現在の年月を取得（または引数から取得）
-                if len(sys.argv) >= 3:
-                    start_year = int(sys.argv[1])
-                    start_month = int(sys.argv[2])
-                else:
-                    # デフォルトは現在の年月
-                    now = datetime.now()
-                    start_year = now.year
-                    start_month = now.month
+                logger.info(f"対象年月: {target_year}年{target_month}月")
+                print(f"\n{'='*50}")
+                print(f"対象年月: {target_year}年{target_month}月の処理を開始")
+                print(f"{'='*50}")
                 
-                # 全ての抽出データを格納するリスト
-                all_extracted_data = []
+                # メールデータを抽出
+                month_data = extract_mail_data(driver, target_year, target_month)
                 
-                # 現在の月から2ヶ月後までをループ
-                for i in range(3):  # 0, 1, 2 の3ヶ月分
-                    # 対象年月を計算
-                    target_month = start_month + i
-                    target_year = start_year
+                # 連絡可能時間を抽出
+                print("\n=== 連絡可能時間の抽出結果 ===")
+                print("-" * 50)
+                
+                for j, data in enumerate(month_data, 1):
+                    print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
+                    contact_time = extract_contact_time(driver, data['url'])
                     
-                    # 月が12を超える場合は年を繰り上げ
-                    if target_month > 12:
-                        target_month -= 12
-                        target_year += 1
+                    # 連絡可能時間を追加
+                    data['contact_time'] = contact_time
                     
-                    logger.info(f"対象年月: {target_year}年{target_month}月")
-                    print(f"\n{'='*50}")
-                    print(f"対象年月: {target_year}年{target_month}月の処理を開始")
-                    print(f"{'='*50}")
+                    # 年月情報を追加
+                    data['year'] = target_year
+                    data['month'] = target_month
                     
-                    # メールデータを抽出
-                    month_data = extract_mail_data(driver, target_year, target_month)
-                    
-                    # 連絡可能時間を抽出
-                    print("\n=== 連絡可能時間の抽出結果 ===")
+                    # 結果を表示
+                    print(f"URL: {data['url']}")
+                    print(f"施設: {data['facility']}")
+                    print(f"名前: {data['name']}")
+                    print(f"連絡可能時間: {contact_time}")
                     print("-" * 50)
-                    
-                    for j, data in enumerate(month_data, 1):
-                        print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
-                        contact_time = extract_contact_time(driver, data['url'])
-                        
-                        # 連絡可能時間を追加
-                        data['contact_time'] = contact_time
-                        
-                        # 年月情報を追加
-                        data['year'] = target_year
-                        data['month'] = target_month
-                        
-                        # 結果を表示
-                        print(f"URL: {data['url']}")
-                        print(f"施設: {data['facility']}")
-                        print(f"名前: {data['name']}")
-                        print(f"連絡可能時間: {contact_time}")
-                        print("-" * 50)
-                    
-                    # 全体のリストに追加
-                    all_extracted_data.extend(month_data)
-                    
-                    logger.info(f"{target_year}年{target_month}月の抽出完了: {len(month_data)}件のデータを抽出しました")
                 
-                logger.info(f"全期間の抽出完了: 合計{len(all_extracted_data)}件のデータを抽出しました")
+                # 全体のリストに追加
+                all_extracted_data.extend(month_data)
                 
-                # HTMLレポートを生成
-                html_file = generate_html_report(all_extracted_data, start_year, start_month)
-                
-                # 処理完了時間を表示
-                process_end_time = time.time()
-                process_duration = process_end_time - process_start_time
-                logger.info(f"処理時間: {process_duration:.2f}秒")
-                
-            except Exception as e:
-                logger.error(f"処理中にエラーが発生: {str(e)}", exc_info=True)
-            finally:
-                if driver:
-                    cleanup_driver(driver)
+                logger.info(f"{target_year}年{target_month}月の抽出完了: {len(month_data)}件のデータを抽出しました")
             
-            logger.info("====== メール時間チェックの処理を終了 ======")
+            logger.info(f"全期間の抽出完了: 合計{len(all_extracted_data)}件のデータを抽出しました")
             
-            # 3分間待機
-            wait_time = 180  # 3分 = 180秒
-            logger.info(f"次の実行まで {wait_time} 秒待機します...")
-            print(f"\n次の実行まで {wait_time} 秒待機します... (Ctrl+C で終了)")
+            # HTMLレポートを生成
+            html_file = generate_html_report(all_extracted_data, start_year, start_month)
             
-            # カウントダウン表示
-            try:
-                for remaining in range(wait_time, 0, -1):
-                    sys.stdout.write(f"\r残り {remaining} 秒  ")
-                    sys.stdout.flush()
-                    time.sleep(1)
-                sys.stdout.write("\r実行を再開します...      \n")
-            except KeyboardInterrupt:
-                logger.info("ユーザーによる中断を検出しました。プログラムを終了します。")
-                print("\nプログラムを終了します...")
-                break
+            # 処理完了時間を表示
+            process_end_time = time.time()
+            process_duration = process_end_time - process_start_time
+            logger.info(f"処理時間: {process_duration:.2f}秒")
+            
+        except Exception as e:
+            logger.error(f"処理中にエラーが発生: {str(e)}", exc_info=True)
+        finally:
+            if driver:
+                cleanup_driver(driver)
+        
+        logger.info("====== メール時間チェックの処理を終了 ======")
     
     except KeyboardInterrupt:
         logger.info("ユーザーによる中断を検出しました。プログラムを終了します。")
