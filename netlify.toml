@@ -1,0 +1,9 @@
+[build]
+  publish = "./"
+  command = "echo 'No build command'"
+
+# Basic認証の設定
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Basic-Auth = "ya:abc12345" 

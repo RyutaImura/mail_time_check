@@ -1,0 +1,80 @@
+name: スクレイピングとデプロイ
+
+on:
+  schedule:
+    - cron: "*/3 0-11 * * *"  # UTCで0時から11時（日本時間9時から20時）まで3分ごとに実行
+  workflow_dispatch:  # 手動実行用
+
+env:
+  BASE_URL: ${{ secrets.BASE_URL }}
+  LOGIN_URL: ${{ secrets.LOGIN_URL }}
+  USERNAME: ${{ secrets.USERNAME }}
+  PASSWORD: ${{ secrets.PASSWORD }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v3
+
+      - name: Pythonをセットアップ
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Chrome と ChromeDriver のインストール
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
+          wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION"
+          CHROMEDRIVER_VERSION=$(cat "LATEST_RELEASE_$CHROME_VERSION")
+          wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+
+      - name: logsディレクトリを作成
+        run: mkdir -p logs
+
+      - name: 必要なパッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: スクレイピングを実行
+        run: python mail_time_check.py
+        timeout-minutes: 15  # タイムアウト設定
+
+      - name: 実行時間の記録
+        run: |
+          echo "スクリプト実行完了時間: $(date)" >> execution_log.txt
+
+      - name: 変更をコミット
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add -A
+          git diff --quiet && git diff --staged --quiet || git commit -m "スクレイピング結果を更新: $(date +%Y-%m-%d_%H:%M:%S)"
+          git push
+
+  deploy:
+    needs: scrape
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v3
+        with:
+          ref: main  # メインブランチから最新の状態を取得
+
+      - name: Netlifyにデプロイ
+        uses: nwtgck/actions-netlify@v2
+        with:
+          publish-dir: "./"
+          production-branch: "main"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "GitHub Actionsからの自動デプロイ: $(date +%Y-%m-%d_%H:%M:%S)"
+          netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          netlify-site-id: ${{ secrets.NETLIFY_SITE_ID }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }} 
