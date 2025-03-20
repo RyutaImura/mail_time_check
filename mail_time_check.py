@@ -183,38 +183,33 @@ def auto_login(driver):
         wait = WebDriverWait(driver, 20)  # タイムアウトを20秒に延長
         
         try:
-            logger.info("ユーザー名入力欄を検索中...")
-            # ユーザー名入力
-            account_input = wait.until(
-                EC.presence_of_element_located((By.NAME, "account"))
-            )
-            # 手動で入力値をクリアしてから入力（JavaScriptを使用）
-            driver.execute_script("arguments[0].value = '';", account_input)
-            account_input.send_keys(username)
-            logger.info("ユーザー名を入力しました")
+            # フォーム要素の検出
+            form = wait.until(EC.presence_of_element_located((By.TAG_NAME, "form")))
+            logger.info("フォーム要素を検出しました")
             
-            logger.info("パスワード入力欄を検索中...")
-            # パスワード入力
-            pass_input = wait.until(
-                EC.presence_of_element_located((By.NAME, "pass"))
-            )
-            # 手動で入力値をクリアしてから入力（JavaScriptを使用）
-            driver.execute_script("arguments[0].value = '';", pass_input)
-            pass_input.send_keys(password)
-            logger.info("パスワードを入力しました")
+            # 問題点：hidden状態のボタンとログインフォームの処理
+            logger.info("JavaScriptでフォーム要素を直接操作します")
             
-            # ヒューマンらしい動作を追加（少し待機）
-            time.sleep(1.5)
+            # 1. ユーザー名とパスワードをJavaScriptを使って設定
+            driver.execute_script(f"""
+                document.querySelector('input[name="account"]').value = '{username}';
+                document.querySelector('input[name="pass"]').value = '{password}';
+            """)
+            logger.info("ユーザー名とパスワードをJavaScriptで設定しました")
             
-            logger.info("ログインボタンを検索中...")
-            # ログインボタンをクリック
-            login_button = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'p.login > input[name="Submit"]'))
-            )
-            logger.info("ログインボタンが見つかりました: クリックします")
-            # 通常のクリックではなく、JavaScriptでイベントを発火
-            driver.execute_script("arguments[0].click();", login_button)
-            logger.info("ログインボタンをクリックしました")
+            # 2. 非表示のログインボタンを表示状態に変更
+            driver.execute_script("""
+                document.querySelector('p.login').style.display = 'block';
+            """)
+            logger.info("非表示のログインボタンを表示状態に変更しました")
+            
+            time.sleep(1)  # 少し待機
+            
+            # 3. フォームをJavaScriptでサブミット
+            driver.execute_script("""
+                document.querySelector('form').submit();
+            """)
+            logger.info("フォームをJavaScriptでサブミットしました")
             
             # ログイン後の待機
             time.sleep(15)  # 待機時間をさらに延長
@@ -226,7 +221,7 @@ def auto_login(driver):
             # 直接ホームページに移動を試みる（ログイン後のリダイレクトが失敗している場合）
             if "LOGIN" in driver.current_url.upper():
                 logger.info("ログイン後もLOGINページにいます。直接ホームページへアクセスを試みます")
-                driver.get(f"{BASE_URL}/index.html")
+                driver.get(f"{BASE_URL}/CAL/monthly_m.php")
                 time.sleep(5)
                 logger.info(f"手動リダイレクト後のURL: {driver.current_url}")
                 logger.info(f"手動リダイレクト後のタイトル: {driver.title}")
