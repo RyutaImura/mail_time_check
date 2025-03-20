@@ -24,9 +24,7 @@ jobs:
           python-version: "3.9"
 
       - name: Chrome と ChromeDriver のインストール
-        uses: actions/setup-chromedriver@v1
-        with:
-          chrome-version: stable
+        uses: nanasess/setup-chromedriver@v2
 
       - name: logsディレクトリを作成
         run: mkdir -p logs
