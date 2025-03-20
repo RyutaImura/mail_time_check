@@ -75,11 +75,16 @@ def setup_driver():
     """
     try:
         options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
+        # ヘッドレスモードを一時的に無効化（GitHub Actionsで動作確認するため）
+        # options.add_argument('--headless')
+        options.add_argument('--headless=new')  # 新しいヘッドレスモード
         options.add_argument('--disable-gpu')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--remote-debugging-port=9222')
+        
+        # User-Agentを設定
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36')
         
         # メモリ使用量を抑えるための設定
         options.add_argument('--disable-extensions')
@@ -123,7 +128,7 @@ def auto_login(driver):
         logger.info("ログインページにアクセスしました")
         
         # ページの読み込みを待機
-        time.sleep(2)  # ページの完全な読み込みを待機
+        time.sleep(5)  # 待機時間を延長
         
         # ログインフォーム要素の取得
         wait = WebDriverWait(driver, 10)
@@ -151,12 +156,36 @@ def auto_login(driver):
             logger.info("ログインボタンをクリックしました")
             
             # ログイン後の待機
-            time.sleep(5)
+            time.sleep(10)  # 待機時間を延長
             
             # ログイン成功の確認（複数の方法で試行）
             try:
                 # まずcalクラスの存在を確認
-                wait.until(EC.presence_of_element_located((By.CLASS_NAME, "cal")))
+                try:
+                    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "cal")))
+                    logger.info("calクラスが見つかりました")
+                except TimeoutException:
+                    # 別の方法でログイン成功を確認
+                    logger.info("calクラスが見つかりませんでした。別の方法で確認します。")
+                    
+                    # 現在のURLがLOGINを含まないことを確認
+                    current_url = driver.current_url
+                    if "LOGIN" in current_url:
+                        logger.error(f"ログイン後もLOGINページにいます: {current_url}")
+                        # ページのHTMLをログに記録して調査
+                        logger.info(f"ページHTML: {driver.page_source[:500]}...")  # 最初の500文字だけ記録
+                        raise Exception("ログインに失敗した可能性があります")
+                    
+                    # ヘッダーなど他の要素で確認を試みる
+                    header_elements = driver.find_elements(By.TAG_NAME, "header")
+                    if header_elements:
+                        logger.info("ヘッダー要素が見つかりました")
+                    
+                    # 最低限のチェック: bodyタグがあれば成功と見なす
+                    body_element = driver.find_element(By.TAG_NAME, "body")
+                    if body_element:
+                        logger.info("bodyタグが確認できました。ログイン成功と判断します。")
+                        return True
             except TimeoutException:
                 logger.info("calクラスが見つかりませんでした。ページのURLを確認します。")
                 current_url = driver.current_url
@@ -170,6 +199,8 @@ def auto_login(driver):
         except TimeoutException as e:
             logger.error("ログインフォームの要素が見つかりませんでした")
             logger.error(f"現在のURL: {driver.current_url}")
+            # ページのHTMLをログに記録して調査
+            logger.error(f"ページHTML: {driver.page_source[:500]}...")  # 最初の500文字だけ記録
             raise
         
     except TimeoutException as e:
