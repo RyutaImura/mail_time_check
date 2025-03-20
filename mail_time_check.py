@@ -14,6 +14,8 @@ from selenium.common.exceptions import TimeoutException, WebDriverException, NoS
 from dotenv import load_dotenv
 import re
 from logging.handlers import RotatingFileHandler
+import platform
+from webdriver_manager.chrome import ChromeDriverManager
 
 # 環境変数の読み込み
 load_dotenv()
@@ -69,30 +71,56 @@ logger.handlers = []
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
+def is_github_actions():
+    """
+    GitHub Actions環境で実行されているかどうかを判定
+    """
+    return os.getenv('GITHUB_ACTIONS') == 'true'
+
 def setup_driver():
     """
     WebDriverの設定と初期化を行います
     """
     try:
-        options = webdriver.ChromeOptions()
-        # ヘッドレスモードを一時的に無効化（GitHub Actionsで動作確認するため）
-        # options.add_argument('--headless')
-        options.add_argument('--headless=new')  # 新しいヘッドレスモード
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--remote-debugging-port=9222')
+        options = Options()
         
-        # User-Agentを設定
+        # 基本設定（共通）
         options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36')
-        
-        # メモリ使用量を抑えるための設定
         options.add_argument('--disable-extensions')
         options.add_argument('--disable-application-cache')
         options.add_argument('--disable-notifications')
         
-        driver = webdriver.Chrome(options=options)
+        if is_github_actions():
+            # GitHub Actions環境用の設定
+            logger.info("GitHub Actions環境として実行します")
+            options.add_argument('--headless=new')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--window-size=1920,1080')
+            
+            # webdriver_managerを使用してChromeDriverをインストール
+            try:
+                service = Service(ChromeDriverManager().install())
+            except Exception as e:
+                logger.error(f"ChromeDriverManagerでの設定に失敗: {str(e)}")
+                # フォールバック: 既存のChromeDriverを使用
+                if platform.system() == 'Linux':
+                    service = Service('/usr/local/bin/chromedriver')
+                else:
+                    service = Service()
+        else:
+            # ローカル環境用の設定
+            logger.info("ローカル環境として実行します")
+            options.add_argument('--headless=new')
+            service = Service(ChromeDriverManager().install())
+            
+        driver = webdriver.Chrome(service=service, options=options)
         driver.set_window_size(1920, 1080)
+        
+        # 基本設定
+        driver.set_page_load_timeout(30)  # ページ読み込みタイムアウトを30秒に設定
+        
         logger.info("WebDriverの初期化が完了しました")
         return driver
     except Exception as e:
@@ -123,6 +151,11 @@ def auto_login(driver):
         username = USERNAME
         password = PASSWORD
         
+        # ログインURLとユーザー名、パスワードをログに出力（パスワードは伏せる）
+        logger.info(f"ログインURL: {login_url}")
+        logger.info(f"ユーザー名: {username}")
+        logger.info("パスワード: ********")
+        
         # ログインページにアクセス
         driver.get(login_url)
         logger.info("ログインページにアクセスしました")
@@ -130,10 +163,27 @@ def auto_login(driver):
         # ページの読み込みを待機
         time.sleep(5)  # 待機時間を延長
         
+        # 現在のURLとタイトルを記録
+        logger.info(f"現在のURL: {driver.current_url}")
+        logger.info(f"ページタイトル: {driver.title}")
+        
+        # ページのHTMLソースの一部をログに記録（問題診断用）
+        page_source = driver.page_source
+        logger.info(f"ページソース（最初の200文字）: {page_source[:200]}...")
+        
+        # ページ上の要素を列挙（デバッグ情報）
+        all_inputs = driver.find_elements(By.TAG_NAME, "input")
+        logger.info(f"ページ上のinput要素数: {len(all_inputs)}")
+        for i, inp in enumerate(all_inputs):
+            inp_type = inp.get_attribute("type")
+            inp_name = inp.get_attribute("name")
+            logger.info(f"input要素 {i+1}: type={inp_type}, name={inp_name}")
+        
         # ログインフォーム要素の取得
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 20)  # タイムアウトを20秒に延長
         
         try:
+            logger.info("ユーザー名入力欄を検索中...")
             # ユーザー名入力
             account_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "account"))
@@ -141,6 +191,7 @@ def auto_login(driver):
             account_input.send_keys(username)
             logger.info("ユーザー名を入力しました")
             
+            logger.info("パスワード入力欄を検索中...")
             # パスワード入力
             pass_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "pass"))
@@ -148,44 +199,57 @@ def auto_login(driver):
             pass_input.send_keys(password)
             logger.info("パスワードを入力しました")
             
+            logger.info("ログインボタンを検索中...")
             # ログインボタンをクリック
             login_button = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'p.login > input[name="Submit"]'))
             )
+            logger.info("ログインボタンが見つかりました: クリックします")
             login_button.click()
             logger.info("ログインボタンをクリックしました")
             
             # ログイン後の待機
-            time.sleep(10)  # 待機時間を延長
+            time.sleep(15)  # 待機時間をさらに延長
+            
+            # ログイン後の状態確認
+            logger.info(f"ログイン後のURL: {driver.current_url}")
+            logger.info(f"ログイン後のタイトル: {driver.title}")
             
             # ログイン成功の確認（複数の方法で試行）
             try:
-                # まずcalクラスの存在を確認
-                try:
-                    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "cal")))
+                # 最も簡単なチェック: URLが変わっているかどうか
+                current_url = driver.current_url
+                if "LOGIN" in current_url.upper():
+                    # まだLOGINページにいる（ログイン失敗の可能性）
+                    logger.error(f"ログイン後もLOGINページにいます: {current_url}")
+                    # ページのHTMLをログに記録して調査
+                    logger.error(f"ページHTML（抜粋）: {driver.page_source[:500]}...")
+                    raise Exception("ログインに失敗した可能性があります")
+                else:
+                    # URLが変わっている（ログイン成功の可能性が高い）
+                    logger.info("URLが変更されました。ログイン成功と判断します。")
+                    return True
+                
+                # 以下の検証は必要なら実行
+                # calクラスがあるか確認
+                cal_elements = driver.find_elements(By.CLASS_NAME, "cal")
+                if cal_elements:
                     logger.info("calクラスが見つかりました")
-                except TimeoutException:
-                    # 別の方法でログイン成功を確認
-                    logger.info("calクラスが見つかりませんでした。別の方法で確認します。")
-                    
-                    # 現在のURLがLOGINを含まないことを確認
-                    current_url = driver.current_url
-                    if "LOGIN" in current_url:
-                        logger.error(f"ログイン後もLOGINページにいます: {current_url}")
-                        # ページのHTMLをログに記録して調査
-                        logger.info(f"ページHTML: {driver.page_source[:500]}...")  # 最初の500文字だけ記録
-                        raise Exception("ログインに失敗した可能性があります")
-                    
-                    # ヘッダーなど他の要素で確認を試みる
-                    header_elements = driver.find_elements(By.TAG_NAME, "header")
-                    if header_elements:
-                        logger.info("ヘッダー要素が見つかりました")
-                    
-                    # 最低限のチェック: bodyタグがあれば成功と見なす
-                    body_element = driver.find_element(By.TAG_NAME, "body")
-                    if body_element:
-                        logger.info("bodyタグが確認できました。ログイン成功と判断します。")
-                        return True
+                    return True
+                
+                # ヘッダーなど他の要素で確認を試みる
+                header_elements = driver.find_elements(By.TAG_NAME, "header")
+                if header_elements:
+                    logger.info("ヘッダー要素が見つかりました")
+                    return True
+                
+                # 最低限のチェック: bodyタグがあれば成功と見なす
+                body_element = driver.find_element(By.TAG_NAME, "body")
+                if body_element:
+                    logger.info("bodyタグが確認できました。ログイン成功と判断します。")
+                    return True
+                
+                raise Exception("ログイン成功を確認できませんでした")
             except TimeoutException:
                 logger.info("calクラスが見つかりませんでした。ページのURLを確認します。")
                 current_url = driver.current_url
