@@ -29,8 +29,8 @@ env:
   # 環境変数を明示的に設定
   BASE_URL: ${{ secrets.BASE_URL }}
   LOGIN_URL: ${{ secrets.LOGIN_URL }}
-  USERNAME: ${{ secrets.SCRAPING_USERNAME }}
-  PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
+  SCRAPING_USERNAME: ${{ secrets.SCRAPING_USERNAME }}
+  SCRAPING_PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
   TZ: 'Asia/Tokyo'  # タイムゾーンを日本時間に設定
 
 jobs:
