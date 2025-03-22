@@ -20,19 +20,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 # 環境変数の読み込み
 load_dotenv()
 
-# 環境変数の設定
-BASE_URL = os.getenv('BASE_URL')
-LOGIN_URL = os.getenv('LOGIN_URL')
-USERNAME = os.getenv('USERNAME')
-PASSWORD = os.getenv('PASSWORD')
-
-# 環境変数が設定されているか確認
-if not all([BASE_URL, LOGIN_URL, USERNAME, PASSWORD]):
-    logger.error("必要な環境変数が設定されていません。")
-    logger.error("以下の環境変数を.envファイルに設定してください：")
-    logger.error("BASE_URL, LOGIN_URL, USERNAME, PASSWORD")
-    sys.exit(1)
-
 # ログディレクトリの作成
 log_dir = 'logs'
 if not os.path.exists(log_dir):
@@ -70,6 +57,19 @@ logger.addHandler(console_handler)
 logger.handlers = []
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
+# 環境変数の設定
+BASE_URL = os.getenv('BASE_URL')
+LOGIN_URL = os.getenv('LOGIN_URL')
+USERNAME = os.getenv('SCRAPING_USERNAME')
+PASSWORD = os.getenv('SCRAPING_PASSWORD')
+
+# 環境変数が設定されているか確認
+if not all([BASE_URL, LOGIN_URL, USERNAME, PASSWORD]):
+    logger.error("必要な環境変数が設定されていません。")
+    logger.error("以下の環境変数を.envファイルに設定してください：")
+    logger.error("BASE_URL, LOGIN_URL, SCRAPING_USERNAME, SCRAPING_PASSWORD")
+    sys.exit(1)
 
 # 日本のタイムゾーンを設定
 JST = pytz.timezone('Asia/Tokyo')
