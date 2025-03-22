@@ -2,7 +2,7 @@ name: スクレイピングとデプロイ
 
 on:
   schedule:
-    - cron: "*/3 21-23,0-11 * * *"  # 日本時間9:00-20:00に対応（UTCで21-23時、0-11時）
+    - cron: "*/10 21-23,0-11 * * *"  # 日本時間9:00-20:00に対応（UTCで21-23時、0-11時）、10分ごとに実行
   workflow_dispatch:  # 手動実行用
     inputs:
       mode:
@@ -84,7 +84,7 @@ jobs:
       - name: 手動実行（繰り返し）の場合
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'repeat'
         run: |
-          echo "手動実行モード（繰り返し）: ${{ github.event.inputs.duration }}分間、3分ごとに実行します"
+          echo "手動実行モード（繰り返し）: ${{ github.event.inputs.duration }}分間、10分ごとに実行します"
           echo "現在の日本時間: $(date '+%Y-%m-%d %H:%M:%S')"
           start_time=$(date +%s)
           end_time=$((start_time + ${{ github.event.inputs.duration }} * 60))
@@ -107,13 +107,13 @@ jobs:
             echo "Netlifyにデプロイします: $(date '+%Y-%m-%d %H:%M:%S JST')"
             npx netlify deploy --prod --auth ${{ secrets.NETLIFY_AUTH_TOKEN }} --site ${{ secrets.NETLIFY_SITE_ID }} --message "繰り返し実行からのデプロイ: $(date '+%Y-%m-%d %H:%M:%S JST')"
             
-            # 次の実行までスリープ（残り時間が3分未満の場合はスリープしない）
+            # 次の実行までスリープ（残り時間が10分未満の場合はスリープしない）
             remaining_time=$((end_time - $(date +%s)))
-            if [ $remaining_time -gt 180 ]; then
-              echo "3分間スリープ"
-              sleep 180
+            if [ $remaining_time -gt 600 ]; then
+              echo "10分間スリープ"
+              sleep 600
             else
-              echo "残り時間が3分未満のため、終了します"
+              echo "残り時間が10分未満のため、終了します"
               break
             fi
             
