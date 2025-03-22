@@ -27,10 +27,10 @@ on:
 
 env:
   # 環境変数を明示的に設定
-  BASE_URL: 'https://apollo-scedure77.net'
-  LOGIN_URL: 'https://apollo-scedure77.net/LOGIN/'
-  USERNAME: 'imurayap33'
-  PASSWORD: 'imimp0633'
+  BASE_URL: ${{ secrets.BASE_URL }}
+  LOGIN_URL: ${{ secrets.LOGIN_URL }}
+  USERNAME: ${{ secrets.SCRAPING_USERNAME }}
+  PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
   TZ: 'Asia/Tokyo'  # タイムゾーンを日本時間に設定
 
 jobs:
