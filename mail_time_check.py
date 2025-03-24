@@ -374,13 +374,18 @@ def extract_mail_data(driver, target_year, target_month):
                         facility_match2 = re.search(facility_pattern2, text_content)
                         facility = facility_match2.group(1) if facility_match2 else "不明"
                     
+                    # メールの内容から月を抽出（例：「3月」「4月」など）
+                    month_match = re.search(r'(\d+)月', text_content)
+                    mail_month = int(month_match.group(1)) if month_match else target_month
+                    
                     if is_zero_only:
                         # 「0」のみを含む名前のデータを「対応不要」に追加
                         logger.info(f"「0」のみを含む名前（対応不要）: {name_part}")
                         zero_name_data.append({
                             "url": href,
                             "facility": facility,
-                            "name": name_part.strip()
+                            "name": name_part.strip(),
+                            "mail_month": mail_month
                         })
                         logger.info(f"「0」のみを含む名前を「対応不要」リストに追加しました: {name_part}")
                         continue
@@ -388,17 +393,20 @@ def extract_mail_data(driver, target_year, target_month):
                         # 数字を含む名前のデータを追加（「0」のみの場合を除く）
                         logger.info(f"数字を含む名前: {name_part}")
                         
-                        # 苗字から数字を抽出
-                        number_match = re.search(r'(\d+)', family_name)
-                        extracted_number = int(number_match.group(1)) if number_match else 999  # 数字が見つからない場合は大きな値を設定
+                        # 苗字から数字を抽出（修正版 - 文字列の後ろにある数字を抽出）
+                        number_match = re.search(r'(\d+)(?!.*\d)', family_name)
+                        extracted_number = int(number_match.group(1)) if number_match else 999
+                        
+                        logger.info(f"抽出した数字情報: 日={extracted_number}")
                         
                         number_name_data.append({
                             "url": href,
                             "facility": facility,
                             "name": name_part.strip(),
-                            "extracted_number": extracted_number  # ソート用に抽出した数字を保存
+                            "extracted_number": extracted_number,
+                            "mail_month": mail_month
                         })
-                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number})")
+                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month})")
                         continue
                     elif has_追:
                         # 「追」を含む名前のデータを追加
@@ -406,7 +414,8 @@ def extract_mail_data(driver, target_year, target_month):
                         追m_name_data.append({
                             "url": href,
                             "facility": facility,
-                            "name": name_part.strip()
+                            "name": name_part.strip(),
+                            "mail_month": mail_month
                         })
                         logger.info(f"「追」を含む名前を別リストに追加しました: {name_part}")
                         continue
@@ -418,7 +427,8 @@ def extract_mail_data(driver, target_year, target_month):
                     extracted_data.append({
                         "url": href,
                         "facility": facility,
-                        "name": clean_name
+                        "name": clean_name,
+                        "mail_month": mail_month
                     })
                     
                     # 結果を表示
@@ -539,8 +549,12 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'
         }
         
-        # 数字付きのデータを数字の若い順にソート
+        # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
         sorted_number_name_data = sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999))
+        
+        # ソート結果のログ出力（デバッグ用）
+        for item in sorted_number_name_data:
+            logger.info(f"ソート後データ: {item.get('name')} - 数字:{item.get('extracted_number')}")
         
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
