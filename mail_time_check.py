@@ -313,6 +313,10 @@ def extract_mail_data(driver, target_year, target_month):
         
         # 抽出結果を格納するリスト
         extracted_data = []
+        # 苗字に数字がついている予約リスト
+        number_name_data = []
+        # 苗字に「追」がついている予約リスト
+        追m_name_data = []
         
         print(f"\n=== {target_year}年{target_month}月のメールデータ ===")
         print("抽出条件に合致する要素:")
@@ -349,15 +353,12 @@ def extract_mail_data(driver, target_year, target_month):
                     family_name = match.group(1)
                     given_name = match.group(2)
                     
-                    # 苗字に数字または「追」が含まれているかチェック
-                    if re.search(r'[0-9追]', family_name):
-                        logger.info(f"除外対象（苗字に数字または「追」が含まれる）: {name_part}")
-                        continue
+                    # 苗字に数字が含まれているかチェック
+                    has_number = re.search(r'[0-9]', family_name)
+                    # 苗字に「追」が含まれているかチェック
+                    has_追 = '追' in family_name
                     
-                    # 名前を整形（空白や「様」を削除）
-                    clean_name = name_part.strip()
-                    
-                    # 施設名を抽出
+                    # 施設名を抽出（共通処理）
                     facility_pattern = r'mail\.gif">([^\d]*(院|宇都宮|心斎橋|高松|博多|天神)[^\d]*?)(\d{1,2}:\d{2})'
                     facility_match = re.search(facility_pattern, html_content)
                     
@@ -368,6 +369,30 @@ def extract_mail_data(driver, target_year, target_month):
                         facility_pattern2 = r'([^\s]+院|宇都宮|心斎橋|高松|博多|天神)[\d:]+' 
                         facility_match2 = re.search(facility_pattern2, text_content)
                         facility = facility_match2.group(1) if facility_match2 else "不明"
+                    
+                    if has_number:
+                        # 数字を含む名前のデータを追加
+                        logger.info(f"数字を含む名前: {name_part}")
+                        number_name_data.append({
+                            "url": href,
+                            "facility": facility,
+                            "name": name_part.strip()
+                        })
+                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part}")
+                        continue
+                    elif has_追:
+                        # 「追」を含む名前のデータを追加
+                        logger.info(f"「追」を含む名前: {name_part}")
+                        追m_name_data.append({
+                            "url": href,
+                            "facility": facility,
+                            "name": name_part.strip()
+                        })
+                        logger.info(f"「追」を含む名前を別リストに追加しました: {name_part}")
+                        continue
+                    
+                    # 名前を整形（空白や「様」を削除）
+                    clean_name = name_part.strip()
                     
                     # データを追加
                     extracted_data.append({
@@ -387,9 +412,12 @@ def extract_mail_data(driver, target_year, target_month):
                 logger.error(f"メール要素 {i} の処理中にエラーが発生: {str(e)}")
         
         print(f"\n合計抽出数: {len(extracted_data)}件")
+        print(f"数字を含む名前の数: {len(number_name_data)}件")
+        print(f"「追」を含む名前の数: {len(追m_name_data)}件")
         print("=" * 50)
         
-        return extracted_data
+        # 通常のデータ、数字を含む名前のデータ、「追」を含む名前のデータを返す
+        return extracted_data, number_name_data, 追m_name_data
         
     except Exception as e:
         logger.error(f"メールデータの抽出中にエラーが発生: {str(e)}")
@@ -466,7 +494,7 @@ def current_time_jst():
     """日本時間の現在時刻を返す"""
     return datetime.now(JST)
 
-def generate_html_report(data_list, start_year, start_month):
+def generate_html_report(data_list, start_year, start_month, number_name_data=None, 追m_name_data=None):
     """
     連絡可能時間ごとに分類したHTMLレポートを生成します
     """
@@ -492,6 +520,7 @@ def generate_html_report(data_list, start_year, start_month):
         
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
+            "数字付き": number_name_data or [],
             "不明": [],
             "いつでも可能": [],
             "10時から11時": [],
@@ -504,6 +533,7 @@ def generate_html_report(data_list, start_year, start_month):
             "17時から18時": [],
             "18時から19時": [],
             "19時から20時": [],
+            "追M": 追m_name_data or [],
             "その他": []
         }
         
@@ -961,105 +991,75 @@ def generate_html_report(data_list, start_year, start_month):
 
 def main():
     """
-    メイン処理
+    メインの実行関数
     """
-    try:
-        logger.info("====== メール時間チェックの処理を開始 ======")
-        process_start_time = time.time()
-        
-        driver = None
-        try:
-            # WebDriverの初期化
-            driver = setup_driver()
-            
-            # ログイン処理
-            auto_login(driver)
-            
-            # 現在の年月を取得（または引数から取得）
-            if len(sys.argv) >= 3:
-                start_year = int(sys.argv[1])
-                start_month = int(sys.argv[2])
-            else:
-                # デフォルトは現在の年月（日本時間で取得）
-                now = current_time_jst()
-                start_year = now.year
-                start_month = now.month
-            
-            logger.info(f"対象年月: {start_year}年{start_month}月")
-            print(f"\n{'='*50}")
-            print(f"対象年月: {start_year}年{start_month}月の処理を開始")
-            print(f"{'='*50}")
-            
-            # 全ての抽出データを格納するリスト
-            all_extracted_data = []
-            
-            # 現在の月から2ヶ月後までをループ
-            for i in range(3):  # 0, 1, 2 の3ヶ月分
-                # 対象年月を計算
-                target_month = start_month + i
-                target_year = start_year
-                
-                # 月が12を超える場合は年を繰り上げ
-                if target_month > 12:
-                    target_month -= 12
-                    target_year += 1
-                
-                logger.info(f"対象年月: {target_year}年{target_month}月")
-                print(f"\n{'='*50}")
-                print(f"対象年月: {target_year}年{target_month}月の処理を開始")
-                print(f"{'='*50}")
-                
-                # メールデータを抽出
-                month_data = extract_mail_data(driver, target_year, target_month)
-                
-                # 連絡可能時間を抽出
-                print("\n=== 連絡可能時間の抽出結果 ===")
-                print("-" * 50)
-                
-                for j, data in enumerate(month_data, 1):
-                    print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
-                    contact_time = extract_contact_time(driver, data['url'])
-                    
-                    # 連絡可能時間を追加
-                    data['contact_time'] = contact_time
-                    
-                    # 年月情報を追加
-                    data['year'] = target_year
-                    data['month'] = target_month
-                    
-                    # 結果を表示
-                    print(f"URL: {data['url']}")
-                    print(f"施設: {data['facility']}")
-                    print(f"名前: {data['name']}")
-                    print(f"連絡可能時間: {contact_time}")
-                    print("-" * 50)
-                
-                # 全体のリストに追加
-                all_extracted_data.extend(month_data)
-                
-                logger.info(f"{target_year}年{target_month}月の抽出完了: {len(month_data)}件のデータを抽出しました")
-            
-            logger.info(f"全期間の抽出完了: 合計{len(all_extracted_data)}件のデータを抽出しました")
-            
-            # HTMLレポートを生成
-            html_file = generate_html_report(all_extracted_data, start_year, start_month)
-            
-            # 処理完了時間を表示
-            process_end_time = time.time()
-            process_duration = process_end_time - process_start_time
-            logger.info(f"処理時間: {process_duration:.2f}秒")
-            
-        except Exception as e:
-            logger.error(f"処理中にエラーが発生: {str(e)}", exc_info=True)
-        finally:
-            if driver:
-                cleanup_driver(driver)
-        
-        logger.info("====== メール時間チェックの処理を終了 ======")
+    logger.info("=== メール時間チェックツール 実行開始 ===")
     
-    except KeyboardInterrupt:
-        logger.info("ユーザーによる中断を検出しました。プログラムを終了します。")
-        print("\nプログラムを終了します...")
+    # コマンドライン引数から対象年月を取得
+    if len(sys.argv) >= 3:
+        try:
+            target_year = int(sys.argv[1])
+            target_month = int(sys.argv[2])
+        except ValueError:
+            logger.error("無効な年月が指定されました。整数値を入力してください。")
+            return 1
+    else:
+        # 引数がない場合は現在の年月を使用
+        current_date = current_time_jst()
+        target_year = current_date.year
+        target_month = current_date.month
+    
+    logger.info(f"対象年月: {target_year}年{target_month}月")
+    
+    # WebDriverの初期化
+    driver = None
+    try:
+        driver = setup_driver()
+        
+        # ログイン処理
+        if not auto_login(driver):
+            logger.error("ログインに失敗しました。終了します。")
+            return 1
+        
+        # メールデータの抽出
+        extracted_data, number_name_data, 追m_name_data = extract_mail_data(driver, target_year, target_month)
+        
+        if not extracted_data and not number_name_data and not 追m_name_data:
+            logger.warning("抽出データが見つかりませんでした。")
+            return 0
+        
+        # 各メールの連絡可能時間を抽出して追加
+        for data in extracted_data:
+            contact_time = extract_contact_time(driver, data['url'])
+            data['contact_time'] = contact_time
+        
+        # 数字を含む名前のデータについても連絡可能時間を抽出
+        if number_name_data:
+            for data in number_name_data:
+                contact_time = extract_contact_time(driver, data['url'])
+                data['contact_time'] = contact_time
+        
+        # 「追」を含む名前のデータについても連絡可能時間を抽出
+        if 追m_name_data:
+            for data in 追m_name_data:
+                contact_time = extract_contact_time(driver, data['url'])
+                data['contact_time'] = contact_time
+        
+        # HTMLレポートの生成
+        generate_html_report(extracted_data, target_year, target_month, number_name_data, 追m_name_data)
+        logger.info("HTMLレポートを生成しました。")
+        
+        return 0
+        
+    except Exception as e:
+        logger.error(f"実行中にエラーが発生しました: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return 1
+    finally:
+        # WebDriverのクリーンアップ
+        cleanup_driver(driver)
+        logger.info("=== メール時間チェックツール 実行終了 ===")
 
 if __name__ == "__main__":
     main() 
