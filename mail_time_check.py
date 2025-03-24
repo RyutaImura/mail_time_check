@@ -387,12 +387,18 @@ def extract_mail_data(driver, target_year, target_month):
                     elif has_number:
                         # 数字を含む名前のデータを追加（「0」のみの場合を除く）
                         logger.info(f"数字を含む名前: {name_part}")
+                        
+                        # 苗字から数字を抽出
+                        number_match = re.search(r'(\d+)', family_name)
+                        extracted_number = int(number_match.group(1)) if number_match else 999  # 数字が見つからない場合は大きな値を設定
+                        
                         number_name_data.append({
                             "url": href,
                             "facility": facility,
-                            "name": name_part.strip()
+                            "name": name_part.strip(),
+                            "extracted_number": extracted_number  # ソート用に抽出した数字を保存
                         })
-                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part}")
+                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number})")
                         continue
                     elif has_追:
                         # 「追」を含む名前のデータを追加
@@ -533,9 +539,12 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'
         }
         
+        # 数字付きのデータを数字の若い順にソート
+        sorted_number_name_data = sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999))
+        
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
-            "数字付き": number_name_data or [],
+            "数字付き": sorted_number_name_data,
             "記載無し": [],
             "いつでも可能": [],
             "10時から11時": [],
@@ -1104,6 +1113,9 @@ def main():
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
                     data['contact_time'] = "記載無し"
                 
+                # 抽出した数字でソートしたデータをログに出力
+                sorted_data = sorted(number_name_data, key=lambda x: x.get('extracted_number', 999))
+                logger.info(f"数字付き予約データを数字の若い順にソート: {[d.get('name', '') + '(' + str(d.get('extracted_number', '?')) + ')' for d in sorted_data]}")
                 logger.info(f"数字付き予約データ {len(number_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
             # 追M付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
