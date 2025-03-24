@@ -317,6 +317,8 @@ def extract_mail_data(driver, target_year, target_month):
         number_name_data = []
         # 苗字に「追」がついている予約リスト
         追m_name_data = []
+        # 苗字に「0」のみがついている予約リスト（対応不要）
+        zero_name_data = []
         
         print(f"\n=== {target_year}年{target_month}月のメールデータ ===")
         print("抽出条件に合致する要素:")
@@ -357,6 +359,8 @@ def extract_mail_data(driver, target_year, target_month):
                     has_number = re.search(r'[0-9]', family_name)
                     # 苗字に「追」が含まれているかチェック
                     has_追 = '追' in family_name
+                    # 苗字に「0」のみが含まれているかチェック（「対応不要」用）
+                    is_zero_only = bool(re.match(r'^[^0-9]*0[^0-9]*$', family_name))
                     
                     # 施設名を抽出（共通処理）
                     facility_pattern = r'mail\.gif">([^\d]*(院|宇都宮|心斎橋|高松|博多|天神)[^\d]*?)(\d{1,2}:\d{2})'
@@ -370,8 +374,18 @@ def extract_mail_data(driver, target_year, target_month):
                         facility_match2 = re.search(facility_pattern2, text_content)
                         facility = facility_match2.group(1) if facility_match2 else "不明"
                     
-                    if has_number:
-                        # 数字を含む名前のデータを追加
+                    if is_zero_only:
+                        # 「0」のみを含む名前のデータを「対応不要」に追加
+                        logger.info(f"「0」のみを含む名前（対応不要）: {name_part}")
+                        zero_name_data.append({
+                            "url": href,
+                            "facility": facility,
+                            "name": name_part.strip()
+                        })
+                        logger.info(f"「0」のみを含む名前を「対応不要」リストに追加しました: {name_part}")
+                        continue
+                    elif has_number:
+                        # 数字を含む名前のデータを追加（「0」のみの場合を除く）
                         logger.info(f"数字を含む名前: {name_part}")
                         number_name_data.append({
                             "url": href,
@@ -414,10 +428,11 @@ def extract_mail_data(driver, target_year, target_month):
         print(f"\n合計抽出数: {len(extracted_data)}件")
         print(f"数字を含む名前の数: {len(number_name_data)}件")
         print(f"「追」を含む名前の数: {len(追m_name_data)}件")
+        print(f"「0」のみを含む名前の数（対応不要）: {len(zero_name_data)}件")
         print("=" * 50)
         
-        # 通常のデータ、数字を含む名前のデータ、「追」を含む名前のデータを返す
-        return extracted_data, number_name_data, 追m_name_data
+        # 通常のデータ、数字を含む名前のデータ、「追」を含む名前のデータ、「0」のみを含む名前のデータを返す
+        return extracted_data, number_name_data, 追m_name_data, zero_name_data
         
     except Exception as e:
         logger.error(f"メールデータの抽出中にエラーが発生: {str(e)}")
@@ -494,7 +509,7 @@ def current_time_jst():
     """日本時間の現在時刻を返す"""
     return datetime.now(JST)
 
-def generate_html_report(data_list, start_year, start_month, number_name_data=None, 追m_name_data=None):
+def generate_html_report(data_list, start_year, start_month, number_name_data=None, 追m_name_data=None, zero_name_data=None):
     """
     連絡可能時間ごとに分類したHTMLレポートを生成します
     """
@@ -521,7 +536,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
             "数字付き": number_name_data or [],
-            "不明": [],
+            "記載無し": [],
             "いつでも可能": [],
             "10時から11時": [],
             "11時から12時": [],
@@ -534,12 +549,18 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             "18時から19時": [],
             "19時から20時": [],
             "追M": 追m_name_data or [],
-            "その他": []
+            "その他": [],
+            "対応不要": zero_name_data or []
         }
         
         # データを分類
         for data in data_list:
-            contact_time = data.get('contact_time', '不明')
+            contact_time = data.get('contact_time', '記載無し')
+            
+            # 「不明」を「記載無し」に変更
+            if contact_time == '不明':
+                contact_time = '記載無し'
+                data['contact_time'] = '記載無し'
             
             # 定義された時間帯に一致するか確認
             if contact_time in time_slots:
@@ -1028,6 +1049,7 @@ def main():
         all_extracted_data = []
         all_number_name_data = []
         all_追m_name_data = []
+        all_zero_name_data = []
         
         # 現在の月から2ヶ月後までをループ（3ヶ月分）
         for i in range(3):  # 0, 1, 2 の3ヶ月分
@@ -1046,9 +1068,9 @@ def main():
             print(f"{'='*50}")
             
             # メールデータを抽出
-            extracted_data, number_name_data, 追m_name_data = extract_mail_data(driver, target_year, target_month)
+            extracted_data, number_name_data, 追m_name_data, zero_name_data = extract_mail_data(driver, target_year, target_month)
             
-            if not extracted_data and not number_name_data and not 追m_name_data:
+            if not extracted_data and not number_name_data and not 追m_name_data and not zero_name_data:
                 logger.warning(f"{target_year}年{target_month}月のデータは見つかりませんでした。")
                 continue
             
@@ -1080,7 +1102,7 @@ def main():
                     data['year'] = target_year
                     data['month'] = target_month
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
-                    data['contact_time'] = "不明"
+                    data['contact_time'] = "記載無し"
                 
                 logger.info(f"数字付き予約データ {len(number_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
@@ -1091,23 +1113,35 @@ def main():
                     data['year'] = target_year
                     data['month'] = target_month
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
-                    data['contact_time'] = "不明"
+                    data['contact_time'] = "記載無し"
                 
                 logger.info(f"追M付き予約データ {len(追m_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
+            
+            # 「0」のみ付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
+            if zero_name_data:
+                for data in zero_name_data:
+                    # 年月情報を追加
+                    data['year'] = target_year
+                    data['month'] = target_month
+                    # 連絡可能時間は抽出しない（デフォルト値を設定）
+                    data['contact_time'] = "記載無し"
+                
+                logger.info(f"「0」のみ付き予約データ（対応不要） {len(zero_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
             # 全体のリストに追加
             all_extracted_data.extend(extracted_data)
             all_number_name_data.extend(number_name_data)
             all_追m_name_data.extend(追m_name_data)
+            all_zero_name_data.extend(zero_name_data)
             
-            logger.info(f"{target_year}年{target_month}月の抽出完了: 通常={len(extracted_data)}件、数字付き={len(number_name_data)}件、追M={len(追m_name_data)}件")
+            logger.info(f"{target_year}年{target_month}月の抽出完了: 通常={len(extracted_data)}件、数字付き={len(number_name_data)}件、追M={len(追m_name_data)}件、対応不要={len(zero_name_data)}件")
         
         # 全期間の合計
-        total_count = len(all_extracted_data) + len(all_number_name_data) + len(all_追m_name_data)
+        total_count = len(all_extracted_data) + len(all_number_name_data) + len(all_追m_name_data) + len(all_zero_name_data)
         logger.info(f"全期間の抽出完了: 合計{total_count}件のデータを抽出しました")
         print(f"\n{'='*50}")
         print(f"全期間の抽出完了: 合計{total_count}件のデータを抽出しました")
-        print(f"通常={len(all_extracted_data)}件、数字付き={len(all_number_name_data)}件、追M={len(all_追m_name_data)}件")
+        print(f"通常={len(all_extracted_data)}件、数字付き={len(all_number_name_data)}件、追M={len(all_追m_name_data)}件、対応不要={len(all_zero_name_data)}件")
         print(f"{'='*50}")
         
         if total_count == 0:
@@ -1115,7 +1149,7 @@ def main():
             return 0
         
         # HTMLレポートの生成
-        generate_html_report(all_extracted_data, start_year, start_month, all_number_name_data, all_追m_name_data)
+        generate_html_report(all_extracted_data, start_year, start_month, all_number_name_data, all_追m_name_data, all_zero_name_data)
         logger.info("HTMLレポートを生成しました。")
         
         return 0
