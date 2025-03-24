@@ -1073,41 +1073,27 @@ def main():
                 print(f"連絡可能時間: {contact_time}")
                 print("-" * 50)
             
-            # 数字付きの予約データの連絡可能時間を抽出
+            # 数字付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
             if number_name_data:
-                for j, data in enumerate(number_name_data, 1):
-                    print(f"\n数字付き{j}. {data['name']}の連絡可能時間を抽出中...")
-                    contact_time = extract_contact_time(driver, data['url'])
-                    data['contact_time'] = contact_time
-                    
+                for data in number_name_data:
                     # 年月情報を追加
                     data['year'] = target_year
                     data['month'] = target_month
-                    
-                    # 結果を表示
-                    print(f"URL: {data['url']}")
-                    print(f"施設: {data['facility']}")
-                    print(f"名前: {data['name']}")
-                    print(f"連絡可能時間: {contact_time}")
-                    print("-" * 50)
+                    # 連絡可能時間は抽出しない（デフォルト値を設定）
+                    data['contact_time'] = "不明"
+                
+                logger.info(f"数字付き予約データ {len(number_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
-            # 追M付きの予約データの連絡可能時間を抽出
+            # 追M付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
             if 追m_name_data:
-                for j, data in enumerate(追m_name_data, 1):
-                    print(f"\n追M{j}. {data['name']}の連絡可能時間を抽出中...")
-                    contact_time = extract_contact_time(driver, data['url'])
-                    data['contact_time'] = contact_time
-                    
+                for data in 追m_name_data:
                     # 年月情報を追加
                     data['year'] = target_year
                     data['month'] = target_month
-                    
-                    # 結果を表示
-                    print(f"URL: {data['url']}")
-                    print(f"施設: {data['facility']}")
-                    print(f"名前: {data['name']}")
-                    print(f"連絡可能時間: {contact_time}")
-                    print("-" * 50)
+                    # 連絡可能時間は抽出しない（デフォルト値を設定）
+                    data['contact_time'] = "不明"
+                
+                logger.info(f"追M付き予約データ {len(追m_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
             # 全体のリストに追加
             all_extracted_data.extend(extracted_data)
