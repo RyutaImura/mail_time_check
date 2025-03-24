@@ -998,18 +998,21 @@ def main():
     # コマンドライン引数から対象年月を取得
     if len(sys.argv) >= 3:
         try:
-            target_year = int(sys.argv[1])
-            target_month = int(sys.argv[2])
+            start_year = int(sys.argv[1])
+            start_month = int(sys.argv[2])
         except ValueError:
             logger.error("無効な年月が指定されました。整数値を入力してください。")
             return 1
     else:
         # 引数がない場合は現在の年月を使用
         current_date = current_time_jst()
-        target_year = current_date.year
-        target_month = current_date.month
+        start_year = current_date.year
+        start_month = current_date.month
     
-    logger.info(f"対象年月: {target_year}年{target_month}月")
+    logger.info(f"対象開始年月: {start_year}年{start_month}月")
+    print(f"\n{'='*50}")
+    print(f"対象開始年月: {start_year}年{start_month}月の処理を開始")
+    print(f"{'='*50}")
     
     # WebDriverの初期化
     driver = None
@@ -1021,32 +1024,112 @@ def main():
             logger.error("ログインに失敗しました。終了します。")
             return 1
         
-        # メールデータの抽出
-        extracted_data, number_name_data, 追m_name_data = extract_mail_data(driver, target_year, target_month)
+        # 全ての抽出データを格納するリスト
+        all_extracted_data = []
+        all_number_name_data = []
+        all_追m_name_data = []
         
-        if not extracted_data and not number_name_data and not 追m_name_data:
+        # 現在の月から2ヶ月後までをループ（3ヶ月分）
+        for i in range(3):  # 0, 1, 2 の3ヶ月分
+            # 対象年月を計算
+            target_month = start_month + i
+            target_year = start_year
+            
+            # 月が12を超える場合は年を繰り上げ
+            if target_month > 12:
+                target_month -= 12
+                target_year += 1
+            
+            logger.info(f"対象年月: {target_year}年{target_month}月")
+            print(f"\n{'='*50}")
+            print(f"対象年月: {target_year}年{target_month}月の処理を開始")
+            print(f"{'='*50}")
+            
+            # メールデータを抽出
+            extracted_data, number_name_data, 追m_name_data = extract_mail_data(driver, target_year, target_month)
+            
+            if not extracted_data and not number_name_data and not 追m_name_data:
+                logger.warning(f"{target_year}年{target_month}月のデータは見つかりませんでした。")
+                continue
+            
+            # 連絡可能時間を抽出
+            print("\n=== 連絡可能時間の抽出結果 ===")
+            print("-" * 50)
+            
+            # 通常の予約データの連絡可能時間を抽出
+            for j, data in enumerate(extracted_data, 1):
+                print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
+                contact_time = extract_contact_time(driver, data['url'])
+                data['contact_time'] = contact_time
+                
+                # 年月情報を追加
+                data['year'] = target_year
+                data['month'] = target_month
+                
+                # 結果を表示
+                print(f"URL: {data['url']}")
+                print(f"施設: {data['facility']}")
+                print(f"名前: {data['name']}")
+                print(f"連絡可能時間: {contact_time}")
+                print("-" * 50)
+            
+            # 数字付きの予約データの連絡可能時間を抽出
+            if number_name_data:
+                for j, data in enumerate(number_name_data, 1):
+                    print(f"\n数字付き{j}. {data['name']}の連絡可能時間を抽出中...")
+                    contact_time = extract_contact_time(driver, data['url'])
+                    data['contact_time'] = contact_time
+                    
+                    # 年月情報を追加
+                    data['year'] = target_year
+                    data['month'] = target_month
+                    
+                    # 結果を表示
+                    print(f"URL: {data['url']}")
+                    print(f"施設: {data['facility']}")
+                    print(f"名前: {data['name']}")
+                    print(f"連絡可能時間: {contact_time}")
+                    print("-" * 50)
+            
+            # 追M付きの予約データの連絡可能時間を抽出
+            if 追m_name_data:
+                for j, data in enumerate(追m_name_data, 1):
+                    print(f"\n追M{j}. {data['name']}の連絡可能時間を抽出中...")
+                    contact_time = extract_contact_time(driver, data['url'])
+                    data['contact_time'] = contact_time
+                    
+                    # 年月情報を追加
+                    data['year'] = target_year
+                    data['month'] = target_month
+                    
+                    # 結果を表示
+                    print(f"URL: {data['url']}")
+                    print(f"施設: {data['facility']}")
+                    print(f"名前: {data['name']}")
+                    print(f"連絡可能時間: {contact_time}")
+                    print("-" * 50)
+            
+            # 全体のリストに追加
+            all_extracted_data.extend(extracted_data)
+            all_number_name_data.extend(number_name_data)
+            all_追m_name_data.extend(追m_name_data)
+            
+            logger.info(f"{target_year}年{target_month}月の抽出完了: 通常={len(extracted_data)}件、数字付き={len(number_name_data)}件、追M={len(追m_name_data)}件")
+        
+        # 全期間の合計
+        total_count = len(all_extracted_data) + len(all_number_name_data) + len(all_追m_name_data)
+        logger.info(f"全期間の抽出完了: 合計{total_count}件のデータを抽出しました")
+        print(f"\n{'='*50}")
+        print(f"全期間の抽出完了: 合計{total_count}件のデータを抽出しました")
+        print(f"通常={len(all_extracted_data)}件、数字付き={len(all_number_name_data)}件、追M={len(all_追m_name_data)}件")
+        print(f"{'='*50}")
+        
+        if total_count == 0:
             logger.warning("抽出データが見つかりませんでした。")
             return 0
         
-        # 各メールの連絡可能時間を抽出して追加
-        for data in extracted_data:
-            contact_time = extract_contact_time(driver, data['url'])
-            data['contact_time'] = contact_time
-        
-        # 数字を含む名前のデータについても連絡可能時間を抽出
-        if number_name_data:
-            for data in number_name_data:
-                contact_time = extract_contact_time(driver, data['url'])
-                data['contact_time'] = contact_time
-        
-        # 「追」を含む名前のデータについても連絡可能時間を抽出
-        if 追m_name_data:
-            for data in 追m_name_data:
-                contact_time = extract_contact_time(driver, data['url'])
-                data['contact_time'] = contact_time
-        
         # HTMLレポートの生成
-        generate_html_report(extracted_data, target_year, target_month, number_name_data, 追m_name_data)
+        generate_html_report(all_extracted_data, start_year, start_month, all_number_name_data, all_追m_name_data)
         logger.info("HTMLレポートを生成しました。")
         
         return 0
