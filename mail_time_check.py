@@ -299,6 +299,9 @@ def extract_mail_data(driver, target_year, target_month):
     指定された年月のメールデータを抽出します
     """
     try:
+        # WebDriverWaitを設定
+        wait = WebDriverWait(driver, 10)
+        
         # メール一覧ページのURLを生成
         mail_url = f"{BASE_URL}/CAL/monthly_m.php?s=ma&c=mail&y={target_year}&m={target_month:02d}#cal"
         
@@ -410,14 +413,44 @@ def extract_mail_data(driver, target_year, target_month):
                         
                         logger.info(f"抽出した数字情報: 日={extracted_number}")
                         
+                        # URLを開いて対応者情報を取得
+                        try:
+                            # 新しいタブでURLを開く
+                            driver.execute_script("window.open('');")
+                            driver.switch_to.window(driver.window_handles[-1])
+                            driver.get(href)
+                            
+                            # 対応者を取得
+                            try:
+                                responder_element = wait.until(
+                                    EC.presence_of_element_located((By.XPATH, "//th[text()='対応者']/following-sibling::td"))
+                                )
+                                responder_value = responder_element.text.strip()
+                                # 日時と名前を分離
+                                parts = responder_value.split()
+                                responder_name = ' '.join(parts[2:]).strip() if len(parts) > 2 else ''
+                                logger.info(f"対応者を取得: {responder_name}")
+                            except Exception as e:
+                                logger.error(f"対応者の取得中にエラー: {str(e)}")
+                                responder_name = ''
+                            
+                            # タブを閉じて元のタブに戻る
+                            driver.close()
+                            driver.switch_to.window(driver.window_handles[0])
+                            
+                        except Exception as e:
+                            logger.error(f"対応者情報の取得中にエラー: {str(e)}")
+                            responder_name = ''
+                        
                         number_name_data.append({
                             "url": href,
                             "facility": facility,
                             "name": name_part.strip(),
                             "extracted_number": extracted_number,
-                            "mail_month": mail_month
+                            "mail_month": mail_month,
+                            "responder": responder_name  # 対応者情報を追加
                         })
-                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month})")
+                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month}, 対応者: {responder_name})")
                         continue
                     
                     # 名前を整形（空白や「様」を削除）
@@ -858,13 +891,16 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     month = item.get('month', '')
                     item_id = f"{slot_id}_{i}"
                     
+                    # 対応者情報を取得（数字付きの場合のみ）
+                    responder_info = f" 対応者：{item.get('responder', '')}" if time_slot == "数字付き" and item.get('responder') else ""
+                    
                     html_content += f"""
                     <div class="person-item" id="item-{item_id}">
                         <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                         <div class="person-link">
                             <a href="{url}" target="_blank">
                                 <span class="month-badge">{month}月</span>
-                                {facility} {name}
+                                {facility} {name}{responder_info}
                             </a>
                         </div>
                     </div>
