@@ -378,7 +378,18 @@ def extract_mail_data(driver, target_year, target_month):
                     month_match = re.search(r'(\d+)月', text_content)
                     mail_month = int(month_match.group(1)) if month_match else target_month
                     
-                    if is_zero_only:
+                    if has_追:
+                        # 「追」を含む名前のデータを追加
+                        logger.info(f"「追」を含む名前: {name_part}")
+                        追m_name_data.append({
+                            "url": href,
+                            "facility": facility,
+                            "name": name_part.strip(),
+                            "mail_month": mail_month
+                        })
+                        logger.info(f"「追」を含む名前を別リストに追加しました: {name_part}")
+                        continue
+                    elif is_zero_only:
                         # 「0」のみを含む名前のデータを「対応不要」に追加
                         logger.info(f"「0」のみを含む名前（対応不要）: {name_part}")
                         zero_name_data.append({
@@ -407,17 +418,6 @@ def extract_mail_data(driver, target_year, target_month):
                             "mail_month": mail_month
                         })
                         logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month})")
-                        continue
-                    elif has_追:
-                        # 「追」を含む名前のデータを追加
-                        logger.info(f"「追」を含む名前: {name_part}")
-                        追m_name_data.append({
-                            "url": href,
-                            "facility": facility,
-                            "name": name_part.strip(),
-                            "mail_month": mail_month
-                        })
-                        logger.info(f"「追」を含む名前を別リストに追加しました: {name_part}")
                         continue
                     
                     # 名前を整形（空白や「様」を削除）
