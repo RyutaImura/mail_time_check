@@ -55,6 +55,11 @@ jobs:
           git config --global user.name "GitHub Actions"
           
       - name: Run mail_time_check.py
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          SCRAPING_USERNAME: ${{ secrets.SCRAPING_USERNAME }}
+          SCRAPING_PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
         run: python mail_time_check.py
         
       - name: Deploy to Netlify
