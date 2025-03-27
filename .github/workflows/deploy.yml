@@ -1,0 +1,78 @@
+name: スクレイピングとデプロイ
+
+on:
+  schedule:
+    - cron: '*/10 0-11 * * *'  # 日本時間9:00-20:00の間、10分ごとに実行
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '実行モード'
+        required: true
+        default: 'single'
+        type: choice
+        options:
+          - single
+          - repeat
+      repeat_interval:
+        description: '繰り返し間隔（分）'
+        required: false
+        default: '10'
+        type: string
+      repeat_count:
+        description: '繰り返し回数'
+        required: false
+        default: '1'
+        type: string
+
+jobs:
+  scrape-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli@15.0.0
+        
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          
+      - name: Run mail_time_check.py
+        run: python mail_time_check.py
+        
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          echo "Netlifyにデプロイします: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          netlify deploy --prod
+          
+      - name: Sleep for repeat mode
+        if: ${{ inputs.mode == 'repeat' }}
+        run: |
+          echo "スリープ開始: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          sleep ${{ inputs.repeat_interval }}m
+          echo "スリープ終了: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          
+      - name: Repeat job if needed
+        if: ${{ inputs.mode == 'repeat' && inputs.repeat_count > '1' }}
+        run: |
+          echo "繰り返し回数を1回減らします: ${{ inputs.repeat_count }} -> $((inputs.repeat_count - 1))"
+          gh workflow run deploy.yml -f mode=repeat -f repeat_interval=${{ inputs.repeat_interval }} -f repeat_count=$((inputs.repeat_count - 1)) 
