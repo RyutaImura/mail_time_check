@@ -11,18 +11,19 @@ on:
         default: 'single'
         type: choice
         options:
-          - single
-          - repeat
-      repeat_interval:
-        description: '繰り返し間隔（分）'
-        required: false
-        default: '10'
-        type: string
-      repeat_count:
-        description: '繰り返し回数'
-        required: false
-        default: '1'
-        type: string
+          - 'single'  # 1回だけ実行
+          - 'repeat'  # 繰り返し実行
+      duration:
+        description: '繰り返し実行の継続時間（分）- repeatモードのみ有効'
+        required: true
+        default: '180'
+        type: choice
+        options:
+          - '30'
+          - '60'
+          - '120'
+          - '180'
+          - '360'
 
 jobs:
   scrape-and-deploy:
@@ -68,11 +69,16 @@ jobs:
         if: ${{ inputs.mode == 'repeat' }}
         run: |
           echo "スリープ開始: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-          sleep ${{ inputs.repeat_interval }}m
+          sleep 10m
           echo "スリープ終了: $(date '+%Y-%m-%d %H:%M:%S %Z')"
           
       - name: Repeat job if needed
-        if: ${{ inputs.mode == 'repeat' && inputs.repeat_count > '1' }}
+        if: ${{ inputs.mode == 'repeat' }}
         run: |
-          echo "繰り返し回数を1回減らします: ${{ inputs.repeat_count }} -> $((inputs.repeat_count - 1))"
-          gh workflow run deploy.yml -f mode=repeat -f repeat_interval=${{ inputs.repeat_interval }} -f repeat_count=$((inputs.repeat_count - 1)) 
+          remaining_minutes=$((inputs.duration - 10))
+          if [ $remaining_minutes -gt 0 ]; then
+            echo "残り時間: ${remaining_minutes}分"
+            gh workflow run deploy.yml -f mode=repeat -f duration=$remaining_minutes
+          else
+            echo "繰り返し実行を終了します"
+          fi 
