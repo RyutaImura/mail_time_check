@@ -500,8 +500,25 @@ def extract_mail_data(driver, target_year, target_month):
         print(f"「0」のみを含む名前の数（対応不要）: {len(zero_name_data)}件")
         print("=" * 50)
         
+        # デバッグ情報：ソート前のデータを出力
+        logger.info("=== ソート前のデータ ===")
+        for item in (number_name_data or []):
+            logger.info(f"ソート前: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+
+        # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
+        sorted_number_name_data = sorted(
+            number_name_data or [], 
+            key=lambda x: x.get('extracted_number', 999)
+        )
+
+        # デバッグ情報：ソート後のデータを出力
+        logger.info("=== ソート後のデータ ===")
+        for item in sorted_number_name_data:
+            logger.info(f"ソート後: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+        
         # 通常のデータ、数字を含む名前のデータ、「追」を含む名前のデータ、「0」のみを含む名前のデータを返す
-        return extracted_data, number_name_data, 追m_name_data, zero_name_data
+        # ソートされた数字付きデータを返すように変更
+        return extracted_data, sorted_number_name_data, 追m_name_data, zero_name_data
         
     except Exception as e:
         logger.error(f"メールデータの抽出中にエラーが発生: {str(e)}")
@@ -608,12 +625,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'
         }
         
-        # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
-        sorted_number_name_data = sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999))
-        
         # 対応者リストを抽出
         responders = []
-        for item in sorted_number_name_data:
+        for item in (number_name_data or []):
             responder = item.get('responder', '')
             if responder and responder not in responders:
                 responders.append(responder)
@@ -621,13 +635,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         # 対応者リストを最大10件までに制限
         responders = responders[:10] if len(responders) > 10 else responders
         
-        # ソート結果のログ出力（デバッグ用）
-        for item in sorted_number_name_data:
-            logger.info(f"ソート後データ: {item.get('name')} - 数字:{item.get('extracted_number')}")
-        
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
-            "数字付き": sorted_number_name_data,
+            "数字付き": sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999)),
             "記載無し": [],
             "いつでも可能": [],
             "10時から11時": [],
@@ -981,8 +991,16 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             """
             
             if slot_data:
-                # 月ごとにソート
-                slot_data.sort(key=lambda x: (x.get('year', 0), x.get('month', 0)))
+                # 数字付きセクションの場合は、すでにソート済みなので月ごとにソートしない
+                if time_slot == "数字付き":
+                    # 数字付きリストのソート順を維持（すでにtime_slotsで数字のみでソート済み）
+                    logger.info(f"数字付きセクション: ソート順を維持します")
+                    # デバッグ: ソート順を確認
+                    for item in slot_data:
+                        logger.info(f"数字付きソート順: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+                else:
+                    # 数字付き以外のセクションは月ごとにソート
+                    slot_data.sort(key=lambda x: (x.get('year', 0), x.get('month', 0)))
                 
                 for i, item in enumerate(slot_data):
                     facility = item['facility']
