@@ -80,6 +80,20 @@ def is_github_actions():
     """
     return os.getenv('GITHUB_ACTIONS') == 'true'
 
+def is_local_dev():
+    """
+    ローカル開発環境かどうかを判定
+    """
+    return os.getenv('IS_LOCAL_DEV') == 'true'
+
+def get_output_path(filename):
+    """
+    環境に応じて適切な出力パスを返す
+    """
+    if is_github_actions():
+        return os.path.join('public', filename)
+    return filename
+
 def setup_driver():
     """
     WebDriverの設定と初期化を行います
@@ -112,8 +126,14 @@ def setup_driver():
                     service = Service('/usr/local/bin/chromedriver')
                 else:
                     service = Service()
+        elif is_local_dev():
+            # ローカル開発環境用の設定
+            logger.info("ローカル開発環境として実行します")
+            # 開発時はブラウザを表示させる（デバッグ用）
+            # options.add_argument('--headless=new')  # コメントアウトしてブラウザを表示
+            service = Service(ChromeDriverManager().install())
         else:
-            # ローカル環境用の設定
+            # 通常のローカル環境用の設定
             logger.info("ローカル環境として実行します")
             options.add_argument('--headless=new')
             service = Service(ChromeDriverManager().install())
@@ -480,8 +500,25 @@ def extract_mail_data(driver, target_year, target_month):
         print(f"「0」のみを含む名前の数（対応不要）: {len(zero_name_data)}件")
         print("=" * 50)
         
+        # デバッグ情報：ソート前のデータを出力
+        logger.info("=== ソート前のデータ ===")
+        for item in (number_name_data or []):
+            logger.info(f"ソート前: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+
+        # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
+        sorted_number_name_data = sorted(
+            number_name_data or [], 
+            key=lambda x: x.get('extracted_number', 999)
+        )
+
+        # デバッグ情報：ソート後のデータを出力
+        logger.info("=== ソート後のデータ ===")
+        for item in sorted_number_name_data:
+            logger.info(f"ソート後: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+        
         # 通常のデータ、数字を含む名前のデータ、「追」を含む名前のデータ、「0」のみを含む名前のデータを返す
-        return extracted_data, number_name_data, 追m_name_data, zero_name_data
+        # ソートされた数字付きデータを返すように変更
+        return extracted_data, sorted_number_name_data, 追m_name_data, zero_name_data
         
     except Exception as e:
         logger.error(f"メールデータの抽出中にエラーが発生: {str(e)}")
@@ -564,7 +601,13 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
     """
     try:
         # 現在の日時を取得 (日本時間)
-        current_datetime = current_time_jst().strftime('%Y-%m-%d %H:%M:%S')
+        current_datetime = current_time_jst()
+        current_date_str = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 現在の日付を取得
+        current_day = current_datetime.day
+        current_month = current_datetime.month
+        current_year = current_datetime.year
         
         # 終了年月を計算
         end_month = start_month + 2
@@ -582,16 +625,19 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'
         }
         
-        # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
-        sorted_number_name_data = sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999))
+        # 対応者リストを抽出
+        responders = []
+        for item in (number_name_data or []):
+            responder = item.get('responder', '')
+            if responder and responder not in responders:
+                responders.append(responder)
         
-        # ソート結果のログ出力（デバッグ用）
-        for item in sorted_number_name_data:
-            logger.info(f"ソート後データ: {item.get('name')} - 数字:{item.get('extracted_number')}")
+        # 対応者リストを最大10件までに制限
+        responders = responders[:10] if len(responders) > 10 else responders
         
         # 時間帯のリスト（表示順序を定義）
         time_slots = {
-            "数字付き": sorted_number_name_data,
+            "数字付き": sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999)),
             "記載無し": [],
             "いつでも可能": [],
             "10時から11時": [],
@@ -823,6 +869,47 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                 #content-container {{
                     display: none;
                 }}
+                /* 追加: フィルターコントロールのスタイル */
+                .filter-control {{
+                    margin-top: 10px;
+                    display: flex;
+                    align-items: center;
+                    background-color: #f0f8ff; /* 薄い青色の背景を追加 */
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #d0e0f0;
+                }}
+                .filter-label {{
+                    margin-right: 10px;
+                    font-weight: bold;
+                    color: #333; /* 白から暗めのグレーに変更 */
+                }}
+                .responder-filter {{
+                    padding: 5px;
+                    border-radius: 3px;
+                    border: 1px solid #ddd;
+                }}
+                /* 追加: 赤色点滅エフェクト */
+                .flashy-blink {{
+                    color: red;
+                    font-weight: bold;
+                    animation: flashyBlink 1.5s ease-in-out infinite;
+                }}
+                
+                @keyframes flashyBlink {{
+                    0% {{
+                        opacity: 1;
+                        text-shadow: 0 0 3px red;
+                    }}
+                    50% {{
+                        opacity: 0.7;
+                        text-shadow: none;
+                    }}
+                    100% {{
+                        opacity: 1;
+                        text-shadow: 0 0 3px red;
+                    }}
+                }}
             </style>
         </head>
         <body>
@@ -847,7 +934,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             <div id="content-container">
                 <div class="container">
                     <h1>{report_title}</h1>
-                    <p>生成日時: {current_datetime}</p>
+                    <p>生成日時: {current_date_str}</p>
                     
                     <div class="controls">
                         <div class="global-actions">
@@ -877,12 +964,43 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <button class="delete-btn" data-slot="{slot_id}">時間帯内すべて削除</button>
                         </div>
                     </div>
+            """
+            
+            # 数字付きセクションの場合、対応者フィルターを追加
+            if time_slot == "数字付き" and responders:
+                html_content += f"""
+                    <div class="filter-control">
+                        <span class="filter-label">対応者フィルター:</span>
+                        <select class="responder-filter" id="responder-filter-{slot_id}">
+                            <option value="all">全て</option>
+                """
+                
+                # 対応者リストをオプションとして追加
+                for responder in responders:
+                    html_content += f'<option value="{responder}">{responder}</option>\n'
+                
+                # 対応者無しのオプションを追加
+                html_content += f'<option value="none">対応者無し</option>\n'
+                html_content += """
+                        </select>
+                    </div>
+                """
+            
+            html_content += """
                     <div class="slot-items">
             """
             
             if slot_data:
-                # 月ごとにソート
-                slot_data.sort(key=lambda x: (x.get('year', 0), x.get('month', 0)))
+                # 数字付きセクションの場合は、すでにソート済みなので月ごとにソートしない
+                if time_slot == "数字付き":
+                    # 数字付きリストのソート順を維持（すでにtime_slotsで数字のみでソート済み）
+                    logger.info(f"数字付きセクション: ソート順を維持します")
+                    # デバッグ: ソート順を確認
+                    for item in slot_data:
+                        logger.info(f"数字付きソート順: 名前={item.get('name')}, 数字={item.get('extracted_number')}, 月={item.get('mail_month')}")
+                else:
+                    # 数字付き以外のセクションは月ごとにソート
+                    slot_data.sort(key=lambda x: (x.get('year', 0), x.get('month', 0)))
                 
                 for i, item in enumerate(slot_data):
                     facility = item['facility']
@@ -892,19 +1010,82 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     item_id = f"{slot_id}_{i}"
                     
                     # 対応者情報を取得（数字付きの場合のみ）
-                    responder_info = f" 対応者：{item.get('responder', '')}" if time_slot == "数字付き" and item.get('responder') else ""
+                    responder_info = ""
+                    responder_attr = ""
                     
-                    html_content += f"""
-                    <div class="person-item" id="item-{item_id}">
-                        <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
-                        <div class="person-link">
-                            <a href="{url}" target="_blank">
-                                <span class="month-badge">{month}月</span>
-                                {facility} {name}{responder_info}
-                            </a>
+                    # 強調表示の条件を確認（数字付きの場合のみ）
+                    highlight_class = ""
+                    is_highlighted = False
+                    
+                    if time_slot == "数字付き":
+                        # 対応者情報の設定
+                        responder = item.get('responder', '')
+                        responder_info = f" 対応者：{responder}" if responder else ""
+                        responder_attr = f'data-responder="{responder}"' if responder else 'data-responder="none"'
+                        
+                        # 現在日から5日前までの日付範囲を計算
+                        from datetime import datetime, timedelta
+                        
+                        # 抽出された数字（日付）を取得
+                        extracted_day = item.get('extracted_number', 0)
+                        # 月情報はURLパラメータではなく、現在の月を参照する
+                        extracted_month = current_month
+                        extracted_year = current_year
+                        
+                        # 現在の日付とマイナス5日前の日付を取得
+                        today = datetime(current_year, current_month, current_day)
+                        five_days_ago = today - timedelta(days=5)
+                        
+                        # 日付が月をまたぐ場合の処理（例：4月2日で、抽出された日が3月30日の場合）
+                        if extracted_day > 25 and current_day < 5:
+                            # 先月の日付と判断
+                            if current_month == 1:
+                                # 1月の場合は前年の12月
+                                extracted_month = 12
+                                extracted_year = current_year - 1
+                            else:
+                                # それ以外は前月
+                                extracted_month = current_month - 1
+                        
+                        # 抽出された日付のdatetimeオブジェクトを作成
+                        try:
+                            extracted_date = datetime(extracted_year, extracted_month, extracted_day)
+                            
+                            # 日付が現在から5日前の範囲内かチェック
+                            if five_days_ago <= extracted_date <= today:
+                                highlight_class = "flashy-blink"
+                                is_highlighted = True
+                                logger.info(f"強調表示する項目: {name}, 日付: {extracted_day}/{extracted_month}/{extracted_year}")
+                        except ValueError:
+                            # 無効な日付（例: 2月31日など）の場合はスキップ
+                            logger.warning(f"無効な日付: {extracted_day}/{extracted_month}/{extracted_year}, アイテム: {name}")
+                            pass
+                    
+                    # 強調表示クラスを適用（条件に一致する場合）
+                    if is_highlighted:
+                        html_content += f"""
+                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                            <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
+                            <div class="person-link">
+                                <a href="{url}" target="_blank" class="{highlight_class}">
+                                    <span class="month-badge">{month}月</span>
+                                    {facility} {name}{responder_info}
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                    """
+                        """
+                    else:
+                        html_content += f"""
+                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                            <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
+                            <div class="person-link">
+                                <a href="{url}" target="_blank">
+                                    <span class="month-badge">{month}月</span>
+                                    {facility} {name}{responder_info}
+                                </a>
+                            </div>
+                        </div>
+                        """
             else:
                 html_content += '<p class="empty">該当者なし</p>'
             
@@ -1049,6 +1230,36 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         const checkedCount = document.querySelectorAll('.checkbox:checked').length;
                         document.getElementById('selected-count').textContent = checkedCount;
                     }
+                    
+                    // 対応者フィルターの機能
+                    const responderFilter = document.querySelector('.responder-filter');
+                    if (responderFilter) {
+                        responderFilter.addEventListener('change', function() {
+                            const selectedValue = this.value;
+                            const slotId = this.id.replace('responder-filter-', '');
+                            
+                            // 全ての項目を取得
+                            const items = document.querySelectorAll(`#slot-${slotId} .person-item`);
+                            
+                            items.forEach(item => {
+                                const responder = item.getAttribute('data-responder') || 'none';
+                                
+                                if (selectedValue === 'all') {
+                                    // 「全て」が選択された場合は全て表示
+                                    item.style.display = 'flex';
+                                } else if (selectedValue === 'none' && responder === 'none') {
+                                    // 「対応者無し」が選択され、対応者が無い項目
+                                    item.style.display = 'flex';
+                                } else if (responder === selectedValue) {
+                                    // 選択された対応者に一致
+                                    item.style.display = 'flex';
+                                } else {
+                                    // それ以外は非表示
+                                    item.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
                 });
             </script>
         </body>
@@ -1056,7 +1267,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         """
         
         # HTMLファイルを保存
-        output_file = 'index.html'
+        output_file = get_output_path('index.html')
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
