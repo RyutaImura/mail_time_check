@@ -584,7 +584,13 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
     """
     try:
         # 現在の日時を取得 (日本時間)
-        current_datetime = current_time_jst().strftime('%Y-%m-%d %H:%M:%S')
+        current_datetime = current_time_jst()
+        current_date_str = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 現在の日付を取得
+        current_day = current_datetime.day
+        current_month = current_datetime.month
+        current_year = current_datetime.year
         
         # 終了年月を計算
         end_month = start_month + 2
@@ -858,16 +864,41 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     margin-top: 10px;
                     display: flex;
                     align-items: center;
+                    background-color: #f0f8ff; /* 薄い青色の背景を追加 */
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #d0e0f0;
                 }}
                 .filter-label {{
                     margin-right: 10px;
                     font-weight: bold;
-                    color: black;
+                    color: #333; /* 白から暗めのグレーに変更 */
                 }}
                 .responder-filter {{
                     padding: 5px;
                     border-radius: 3px;
                     border: 1px solid #ddd;
+                }}
+                /* 追加: 赤色点滅エフェクト */
+                .flashy-blink {{
+                    color: red;
+                    font-weight: bold;
+                    animation: flashyBlink 1.5s ease-in-out infinite;
+                }}
+                
+                @keyframes flashyBlink {{
+                    0% {{
+                        opacity: 1;
+                        text-shadow: 0 0 3px red;
+                    }}
+                    50% {{
+                        opacity: 0.7;
+                        text-shadow: none;
+                    }}
+                    100% {{
+                        opacity: 1;
+                        text-shadow: 0 0 3px red;
+                    }}
                 }}
             </style>
         </head>
@@ -893,7 +924,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             <div id="content-container">
                 <div class="container">
                     <h1>{report_title}</h1>
-                    <p>生成日時: {current_datetime}</p>
+                    <p>生成日時: {current_date_str}</p>
                     
                     <div class="controls">
                         <div class="global-actions">
@@ -963,22 +994,80 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     # 対応者情報を取得（数字付きの場合のみ）
                     responder_info = ""
                     responder_attr = ""
+                    
+                    # 強調表示の条件を確認（数字付きの場合のみ）
+                    highlight_class = ""
+                    is_highlighted = False
+                    
                     if time_slot == "数字付き":
+                        # 対応者情報の設定
                         responder = item.get('responder', '')
                         responder_info = f" 対応者：{responder}" if responder else ""
                         responder_attr = f'data-responder="{responder}"' if responder else 'data-responder="none"'
+                        
+                        # 現在日から5日前までの日付範囲を計算
+                        from datetime import datetime, timedelta
+                        
+                        # 抽出された数字（日付）を取得
+                        extracted_day = item.get('extracted_number', 0)
+                        # 月情報はURLパラメータではなく、現在の月を参照する
+                        extracted_month = current_month
+                        extracted_year = current_year
+                        
+                        # 現在の日付とマイナス5日前の日付を取得
+                        today = datetime(current_year, current_month, current_day)
+                        five_days_ago = today - timedelta(days=5)
+                        
+                        # 日付が月をまたぐ場合の処理（例：4月2日で、抽出された日が3月30日の場合）
+                        if extracted_day > 25 and current_day < 5:
+                            # 先月の日付と判断
+                            if current_month == 1:
+                                # 1月の場合は前年の12月
+                                extracted_month = 12
+                                extracted_year = current_year - 1
+                            else:
+                                # それ以外は前月
+                                extracted_month = current_month - 1
+                        
+                        # 抽出された日付のdatetimeオブジェクトを作成
+                        try:
+                            extracted_date = datetime(extracted_year, extracted_month, extracted_day)
+                            
+                            # 日付が現在から5日前の範囲内かチェック
+                            if five_days_ago <= extracted_date <= today:
+                                highlight_class = "flashy-blink"
+                                is_highlighted = True
+                                logger.info(f"強調表示する項目: {name}, 日付: {extracted_day}/{extracted_month}/{extracted_year}")
+                        except ValueError:
+                            # 無効な日付（例: 2月31日など）の場合はスキップ
+                            logger.warning(f"無効な日付: {extracted_day}/{extracted_month}/{extracted_year}, アイテム: {name}")
+                            pass
                     
-                    html_content += f"""
-                    <div class="person-item" id="item-{item_id}" {responder_attr}>
-                        <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
-                        <div class="person-link">
-                            <a href="{url}" target="_blank">
-                                <span class="month-badge">{month}月</span>
-                                {facility} {name}{responder_info}
-                            </a>
+                    # 強調表示クラスを適用（条件に一致する場合）
+                    if is_highlighted:
+                        html_content += f"""
+                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                            <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
+                            <div class="person-link">
+                                <a href="{url}" target="_blank" class="{highlight_class}">
+                                    <span class="month-badge">{month}月</span>
+                                    {facility} {name}{responder_info}
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                    """
+                        """
+                    else:
+                        html_content += f"""
+                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                            <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
+                            <div class="person-link">
+                                <a href="{url}" target="_blank">
+                                    <span class="month-badge">{month}月</span>
+                                    {facility} {name}{responder_info}
+                                </a>
+                            </div>
+                        </div>
+                        """
             else:
                 html_content += '<p class="empty">該当者なし</p>'
             
