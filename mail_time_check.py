@@ -91,7 +91,13 @@ def get_output_path(filename):
     環境に応じて適切な出力パスを返す
     """
     if is_github_actions():
-        return os.path.join('public', filename)
+        # GitHub Actions環境では、publicディレクトリに出力
+        output_dir = 'public'
+        # publicディレクトリが存在しない場合は作成
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            logger.info(f"出力ディレクトリを作成しました: {output_dir}")
+        return os.path.join(output_dir, filename)
     return filename
 
 def setup_driver():
