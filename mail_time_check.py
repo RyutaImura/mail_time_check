@@ -80,6 +80,20 @@ def is_github_actions():
     """
     return os.getenv('GITHUB_ACTIONS') == 'true'
 
+def is_local_dev():
+    """
+    ローカル開発環境かどうかを判定
+    """
+    return os.getenv('IS_LOCAL_DEV') == 'true'
+
+def get_output_path(filename):
+    """
+    環境に応じて適切な出力パスを返す
+    """
+    if is_github_actions():
+        return os.path.join('public', filename)
+    return filename
+
 def setup_driver():
     """
     WebDriverの設定と初期化を行います
@@ -112,8 +126,14 @@ def setup_driver():
                     service = Service('/usr/local/bin/chromedriver')
                 else:
                     service = Service()
+        elif is_local_dev():
+            # ローカル開発環境用の設定
+            logger.info("ローカル開発環境として実行します")
+            # 開発時はブラウザを表示させる（デバッグ用）
+            # options.add_argument('--headless=new')  # コメントアウトしてブラウザを表示
+            service = Service(ChromeDriverManager().install())
         else:
-            # ローカル環境用の設定
+            # 通常のローカル環境用の設定
             logger.info("ローカル環境として実行します")
             options.add_argument('--headless=new')
             service = Service(ChromeDriverManager().install())
@@ -585,6 +605,16 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         # 数字付きのデータを抽出された数字のみでソート（月情報は無視）
         sorted_number_name_data = sorted(number_name_data or [], key=lambda x: x.get('extracted_number', 999))
         
+        # 対応者リストを抽出
+        responders = []
+        for item in sorted_number_name_data:
+            responder = item.get('responder', '')
+            if responder and responder not in responders:
+                responders.append(responder)
+        
+        # 対応者リストを最大10件までに制限
+        responders = responders[:10] if len(responders) > 10 else responders
+        
         # ソート結果のログ出力（デバッグ用）
         for item in sorted_number_name_data:
             logger.info(f"ソート後データ: {item.get('name')} - 数字:{item.get('extracted_number')}")
@@ -823,6 +853,22 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                 #content-container {{
                     display: none;
                 }}
+                /* 追加: フィルターコントロールのスタイル */
+                .filter-control {{
+                    margin-top: 10px;
+                    display: flex;
+                    align-items: center;
+                }}
+                .filter-label {{
+                    margin-right: 10px;
+                    font-weight: bold;
+                    color: black;
+                }}
+                .responder-filter {{
+                    padding: 5px;
+                    border-radius: 3px;
+                    border: 1px solid #ddd;
+                }}
             </style>
         </head>
         <body>
@@ -877,6 +923,29 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <button class="delete-btn" data-slot="{slot_id}">時間帯内すべて削除</button>
                         </div>
                     </div>
+            """
+            
+            # 数字付きセクションの場合、対応者フィルターを追加
+            if time_slot == "数字付き" and responders:
+                html_content += f"""
+                    <div class="filter-control">
+                        <span class="filter-label">対応者フィルター:</span>
+                        <select class="responder-filter" id="responder-filter-{slot_id}">
+                            <option value="all">全て</option>
+                """
+                
+                # 対応者リストをオプションとして追加
+                for responder in responders:
+                    html_content += f'<option value="{responder}">{responder}</option>\n'
+                
+                # 対応者無しのオプションを追加
+                html_content += f'<option value="none">対応者無し</option>\n'
+                html_content += """
+                        </select>
+                    </div>
+                """
+            
+            html_content += """
                     <div class="slot-items">
             """
             
@@ -892,10 +961,15 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     item_id = f"{slot_id}_{i}"
                     
                     # 対応者情報を取得（数字付きの場合のみ）
-                    responder_info = f" 対応者：{item.get('responder', '')}" if time_slot == "数字付き" and item.get('responder') else ""
+                    responder_info = ""
+                    responder_attr = ""
+                    if time_slot == "数字付き":
+                        responder = item.get('responder', '')
+                        responder_info = f" 対応者：{responder}" if responder else ""
+                        responder_attr = f'data-responder="{responder}"' if responder else 'data-responder="none"'
                     
                     html_content += f"""
-                    <div class="person-item" id="item-{item_id}">
+                    <div class="person-item" id="item-{item_id}" {responder_attr}>
                         <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                         <div class="person-link">
                             <a href="{url}" target="_blank">
@@ -1049,6 +1123,36 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         const checkedCount = document.querySelectorAll('.checkbox:checked').length;
                         document.getElementById('selected-count').textContent = checkedCount;
                     }
+                    
+                    // 対応者フィルターの機能
+                    const responderFilter = document.querySelector('.responder-filter');
+                    if (responderFilter) {
+                        responderFilter.addEventListener('change', function() {
+                            const selectedValue = this.value;
+                            const slotId = this.id.replace('responder-filter-', '');
+                            
+                            // 全ての項目を取得
+                            const items = document.querySelectorAll(`#slot-${slotId} .person-item`);
+                            
+                            items.forEach(item => {
+                                const responder = item.getAttribute('data-responder') || 'none';
+                                
+                                if (selectedValue === 'all') {
+                                    // 「全て」が選択された場合は全て表示
+                                    item.style.display = 'flex';
+                                } else if (selectedValue === 'none' && responder === 'none') {
+                                    // 「対応者無し」が選択され、対応者が無い項目
+                                    item.style.display = 'flex';
+                                } else if (responder === selectedValue) {
+                                    // 選択された対応者に一致
+                                    item.style.display = 'flex';
+                                } else {
+                                    // それ以外は非表示
+                                    item.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
                 });
             </script>
         </body>
@@ -1056,7 +1160,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         """
         
         # HTMLファイルを保存
-        output_file = 'index.html'
+        output_file = get_output_path('index.html')
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
