@@ -1,5 +1,5 @@
 [build]
-  publish = "./"
+  publish = "public"
   command = "echo 'No build command'"
 
 # Basic認証の設定
