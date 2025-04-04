@@ -1182,7 +1182,17 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         const username = usernameInput.value;
                         const password = passwordInput.value;
                         
-                        if (username === 'ya' && password === 'abc12345') {
+                        const configuredUsername = process.env.LOGIN_USERNAME;
+                        const configuredPassword = process.env.LOGIN_PASSWORD;
+                        
+                        if (!configuredUsername || !configuredPassword) {
+                            console.error('ログイン情報が環境変数に設定されていません');
+                            errorMessage.textContent = '認証設定エラー。管理者に連絡してください。';
+                            errorMessage.style.display = 'block';
+                            return;
+                        }
+                        
+                        if (username === configuredUsername && password === configuredPassword) {
                             // 認証成功
                             sessionStorage.setItem('isAuthenticated', 'true');
                             loginOverlay.style.display = 'none';
@@ -1354,17 +1364,30 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // Firebase設定
                     const firebaseConfig = {
-                        apiKey: "AIzaSyB2-506S8Y2WhiJsJTBRwJKsS4X_nS5FBI",
-                        authDomain: "call-status-checker.firebaseapp.com",
-                        projectId: "call-status-checker",
-                        storageBucket: "call-status-checker.firebasestorage.app",
-                        messagingSenderId: "253424772443",
-                        appId: "1:253424772443:web:cd78663d4448d8aca2a67e"
+                        apiKey: process.env.FIREBASE_API_KEY,
+                        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+                        projectId: process.env.FIREBASE_PROJECT_ID,
+                        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+                        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+                        appId: process.env.FIREBASE_APP_ID
                     };
                     
                     // Firebaseの初期化
                     function initializeFirebase() {
                         try {
+                            // 環境変数が設定されているか確認
+                            const missingVars = [];
+                            for (const key in firebaseConfig) {
+                                if (!firebaseConfig[key]) {
+                                    missingVars.push(key);
+                                }
+                            }
+                            
+                            if (missingVars.length > 0) {
+                                console.error(`Firebase設定の環境変数が不足しています: ${missingVars.join(', ')}`);
+                                return false;
+                            }
+                            
                             // Firebaseアプリの初期化
                             firebase.initializeApp(firebaseConfig);
                             db = firebase.firestore();
