@@ -677,6 +677,17 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                 # 定義されていない時間帯はその他に分類
                 time_slots['その他'].append(data)
         
+        # 環境変数から設定値を取得（デフォルト値を設定）
+        login_username = os.getenv("LOGIN_USERNAME", "ya")
+        login_password = os.getenv("LOGIN_PASSWORD", "abc12345")
+        
+        firebase_api_key = os.getenv("FIREBASE_API_KEY", "AIzaSyB2-506S8Y2WhiJsJTBRwJKsS4X_nS5FBI")
+        firebase_auth_domain = os.getenv("FIREBASE_AUTH_DOMAIN", "call-status-checker.firebaseapp.com")
+        firebase_project_id = os.getenv("FIREBASE_PROJECT_ID", "call-status-checker")
+        firebase_storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "call-status-checker.appspot.com")
+        firebase_messaging_sender_id = os.getenv("FIREBASE_MESSAGING_SENDER_ID", "253424772443")
+        firebase_app_id = os.getenv("FIREBASE_APP_ID", "1:253424772443:web:cd78663d4448d8aca2a67e")
+        
         # HTMLを生成
         html_content = f"""
         <!DOCTYPE html>
@@ -1182,23 +1193,22 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         const username = usernameInput.value;
                         const password = passwordInput.value;
                         
-                        const configuredUsername = process.env.LOGIN_USERNAME;
-                        const configuredPassword = process.env.LOGIN_PASSWORD;
+                        // ハードコードされた値を直接使用
+                        const configuredUsername = "ya";
+                        const configuredPassword = "abc12345";
                         
-                        if (!configuredUsername || !configuredPassword) {
-                            console.error('ログイン情報が環境変数に設定されていません');
-                            errorMessage.textContent = '認証設定エラー。管理者に連絡してください。';
-                            errorMessage.style.display = 'block';
-                            return;
-                        }
+                        console.log('入力されたユーザー名:', username);
+                        console.log('設定されたユーザー名:', configuredUsername);
                         
                         if (username === configuredUsername && password === configuredPassword) {
                             // 認証成功
+                            console.log('認証成功');
                             sessionStorage.setItem('isAuthenticated', 'true');
                             loginOverlay.style.display = 'none';
                             contentContainer.style.display = 'block';
                         } else {
                             // 認証失敗
+                            console.log('認証失敗');
                             errorMessage.style.display = 'block';
                             passwordInput.value = '';
                         }
@@ -1364,12 +1374,12 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // Firebase設定
                     const firebaseConfig = {
-                        apiKey: process.env.FIREBASE_API_KEY,
-                        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-                        projectId: process.env.FIREBASE_PROJECT_ID,
-                        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-                        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-                        appId: process.env.FIREBASE_APP_ID
+                        apiKey: "AIzaSyB2-506S8Y2WhiJsJTBRwJKsS4X_nS5FBI",
+                        authDomain: "call-status-checker.firebaseapp.com",
+                        projectId: "call-status-checker",
+                        storageBucket: "call-status-checker.appspot.com",
+                        messagingSenderId: "253424772443",
+                        appId: "1:253424772443:web:cd78663d4448d8aca2a67e"
                     };
                     
                     // Firebaseの初期化
@@ -1686,6 +1696,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
         </body>
         </html>
         """
+        
+        # HTMLを生成した後、環境変数の値を置換
+        # フォーマット関数を使用しない（すでに直接値を設定しているため）
         
         # HTMLファイルを保存
         output_file = get_output_path('index.html')
