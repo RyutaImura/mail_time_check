@@ -1513,7 +1513,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             
                             // 2. Cookieへの保存
                             try {
-                                setCookie('callStatusData', JSON.stringify(callStatusData), 30);
+                                document.cookie = `callStatusData=${encodeURIComponent(JSON.stringify(callStatusData))}; max-age=2592000; path=/;`;
                                 console.log("Cookieにデータを保存しました");
                             } catch (e) {
                                 console.error('Cookieへの保存に失敗:', e);
@@ -1534,26 +1534,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         }
                     }
                     
-                    // Cookie操作用のヘルパー関数
-                    function setCookie(name, value, days) {
-                        const expires = new Date();
-                        expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-                        document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/';
-                    }
-                    
-                    function getCookie(name) {
-                        const nameEQ = name + '=';
-                        const ca = document.cookie.split(';');
-                        for (let i = 0; i < ca.length; i++) {
-                            let c = ca[i];
-                            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-                            if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
-                        }
-                        return null;
-                    }
-                    
                     // チェックボックスの状態を復元する関数
                     function restoreCallStatus() {
+                        console.log("チェックボックスの状態を復元します", callStatusData);
                         document.querySelectorAll('.call-checkbox').forEach(checkbox => {
                             const reservationId = checkbox.getAttribute('data-reservation-id');
                             if (reservationId && callStatusData[reservationId]) {
@@ -1562,31 +1545,46 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 if (personItem) {
                                     personItem.classList.add('call-checked');
                                 }
+                                console.log(`ID:${reservationId} のチェックを復元しました`);
                             }
                         });
                     }
                     
                     // チェックボックスの状態に基づいて項目をソートする関数
                     function sortItemsByCheckStatus() {
+                        console.log("チェック状態によるソートを実行します");
                         document.querySelectorAll('.time-slot').forEach(slot => {
+                            // 数字付き、追M、その他、対応不要の場合はソートしない
+                            const slotId = slot.id.replace('slot-', '');
+                            if (['数字付き', '追M', 'その他', '対応不要'].includes(slotId)) {
+                                console.log(`スロット '${slotId}' はソート対象外です`);
+                                return;
+                            }
+                            
                             const items = Array.from(slot.querySelectorAll('.person-item'));
-                            const slotItems = slot.querySelector('.slot-items');
+                            const container = slot.querySelector('.slot-items');
                             
-                            // チェック状態に基づいてソート
-                            items.sort((a, b) => {
-                                const aChecked = a.querySelector('.call-checkbox').checked;
-                                const bChecked = b.querySelector('.call-checkbox').checked;
-                                return bChecked - aChecked;
-                            });
-                            
-                            // ソートされた項目を再配置
-                            items.forEach(item => {
-                                slotItems.appendChild(item);
-                            });
+                            if (items.length > 0 && container) {
+                                console.log(`スロット '${slotId}' をソートします: ${items.length}件`);
+                                
+                                // チェック状態でソート（チェック済みを後に）
+                                items.sort((a, b) => {
+                                    // class属性とcheckbox.checkedの両方を確認する
+                                    const aCheckbox = a.querySelector('.call-checkbox');
+                                    const bCheckbox = b.querySelector('.call-checkbox');
+                                    
+                                    // チェック状態をクラスとチェックボックスの両方から判定
+                                    const aChecked = (a.classList.contains('call-checked') || (aCheckbox && aCheckbox.checked)) ? 1 : 0;
+                                    const bChecked = (b.classList.contains('call-checked') || (bCheckbox && bCheckbox.checked)) ? 1 : 0;
+                                    
+                                    return aChecked - bChecked; // チェックされていない項目が先頭に来るよう正順でソート
+                                });
+                                
+                                // ソート後の要素を再配置
+                                items.forEach(item => container.appendChild(item));
+                                console.log(`スロット '${slotId}' のソートが完了しました`);
+                            }
                         });
-                        
-                        // ソート後にチェックボックスの状態を復元
-                        restoreCallStatus();
                     }
                     
                     // チェックボックスのイベントリスナー設定
@@ -1617,6 +1615,11 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             
                             // 更新されたデータを保存
                             saveCallStatus();
+                            
+                            // 項目を再ソート（変更があった場合のみ）
+                            setTimeout(() => {
+                                sortItemsByCheckStatus();
+                            }, 100);
                         }
                     });
                     
@@ -1674,11 +1677,23 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             console.warn('Firebase初期化失敗 - ローカルストレージのみ使用します');
                         }
                         
+                        // データの読み込みと復元を順番に実行
                         await loadCallStatus();
-                        restoreCallStatus();
-                        sortItemsByCheckStatus();
+                        console.log('読み込まれたデータ:', callStatusData);
+                        
+                        // チェックボックスの状態を復元（少し待ってから実行）
+                        setTimeout(() => {
+                            restoreCallStatus();
+                            
+                            // チェックボックスの状態に基づいて要素をソート
+                            setTimeout(() => {
+                                sortItemsByCheckStatus();
+                                console.log('架電チェックボックス機能の初期化が完了しました');
+                            }, 200);
+                        }, 100);
+                        
+                        // 自動保存を開始
                         startAutoSave();
-                        console.log('架電チェックボックス機能の初期化が完了しました');
                     }
                     
                     // アプリケーション初期化
