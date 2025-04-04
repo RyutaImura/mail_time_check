@@ -685,6 +685,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>連絡可能時間リスト - {report_title}</title>
+            <!-- Firebase SDK -->
+            <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
             <style>
                 body {{
                     font-family: 'Meiryo', 'Hiragino Kaku Gothic ProN', sans-serif;
@@ -1347,26 +1350,58 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // ====== 架電済みチェックボックス機能 ======
                     let callStatusData = {};
+                    let db; // Firestore参照
                     
-                    // PHPサーバーからのデータ読み込み関数
+                    // Firebase設定
+                    const firebaseConfig = {
+                        apiKey: "AIzaSyDFdhYG6WA-6Cn9TTSPbgZ8GnJ4l4J-suk",
+                        authDomain: "call-status-checker.firebaseapp.com",
+                        projectId: "call-status-checker",
+                        storageBucket: "call-status-checker.appspot.com",
+                        messagingSenderId: "810881916703",
+                        appId: "1:810881916703:web:a1e5d7f3dcede8172bed4c"
+                    };
+                    
+                    // Firebaseの初期化
+                    function initializeFirebase() {
+                        try {
+                            // Firebaseアプリの初期化
+                            firebase.initializeApp(firebaseConfig);
+                            db = firebase.firestore();
+                            console.log("Firebase初期化完了");
+                            return true;
+                        } catch (error) {
+                            console.error("Firebase初期化エラー:", error);
+                            return false;
+                        }
+                    }
+                    
+                    // データ読み込み関数
                     async function loadCallStatus() {
                         try {
-                            console.log("サーバーからデータ読み込みを試行中...");
-                            const response = await fetch('check_status.php');
-                            if (response.ok) {
-                                const data = await response.json();
-                                console.log("サーバーからデータを正常に読み込みました");
-                                callStatusData = data;
-                                // ローカルストレージにもバックアップとして保存
-                                localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
-                                return true;
-                            } else {
-                                console.error('サーバーからのデータ読み込みに失敗しました', response.status);
-                                throw new Error('Server response was not OK');
+                            console.log("データ読み込みを試行中...");
+                            
+                            // Firebaseが利用可能な場合はFirestoreからデータを読み込む
+                            if (db) {
+                                try {
+                                    console.log("Firestoreからデータを読み込み中...");
+                                    const docRef = db.collection("callStatus").doc("status");
+                                    const doc = await docRef.get();
+                                    
+                                    if (doc.exists) {
+                                        callStatusData = doc.data().data || {};
+                                        console.log("Firestoreからデータを読み込みました:", callStatusData);
+                                        
+                                        // ローカルストレージにもバックアップとして保存
+                                        localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
+                                        return true;
+                                    } else {
+                                        console.log("Firestoreにデータが存在しません");
+                                    }
+                                } catch (error) {
+                                    console.error("Firestoreからの読み込みエラー:", error);
+                                }
                             }
-                        } catch (error) {
-                            console.error('データ読み込みエラー:', error);
-                            console.log("ローカルストレージからのデータ復元を試みます");
                             
                             // 1. ローカルストレージからの読み込みを試みる
                             const savedData = localStorage.getItem('callStatusData');
@@ -1408,40 +1443,34 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             callStatusData = {};
                             console.log("データの復元に失敗しました。空のデータで初期化します");
                             return false;
+                        } catch (error) {
+                            console.error('データ読み込みエラー:', error);
+                            callStatusData = {};
+                            return false;
                         }
                     }
                     
-                    // サーバーにデータを保存する関数
+                    // データを保存する関数
                     async function saveCallStatus() {
                         try {
-                            console.log("サーバーにデータ保存を試行中...");
-                            const response = await fetch('save_status.php', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify(callStatusData)
-                            });
+                            console.log("データ保存を実行中...");
                             
-                            if (response.ok) {
-                                const result = await response.json();
-                                console.log("サーバーにデータを正常に保存しました", result);
-                                // バックアップとしてローカルストレージにも保存
-                                localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
-                                // Cookieにも保存
-                                setCookie('callStatusData', JSON.stringify(callStatusData), 30);
-                                // データ属性にも保存
-                                document.body.setAttribute('data-call-status', JSON.stringify(callStatusData));
-                                return true;
-                            } else {
-                                console.error('サーバーへのデータ保存に失敗しました', response.status);
-                                throw new Error('Server response was not OK');
+                            // Firebaseが利用可能な場合はFirestoreにデータを保存
+                            if (db) {
+                                try {
+                                    console.log("Firestoreにデータを保存中...");
+                                    await db.collection("callStatus").doc("status").set({
+                                        data: callStatusData,
+                                        updatedAt: new Date()
+                                    });
+                                    console.log("Firestoreにデータを保存しました");
+                                } catch (error) {
+                                    console.error("Firestoreへの保存エラー:", error);
+                                }
                             }
-                        } catch (error) {
-                            console.error('データ保存エラー:', error);
-                            console.log("代替保存方法を試みます");
                             
-                            // 1. ローカルストレージへの保存を試みる
+                            // 各ストレージに保存を試みる
+                            // 1. ローカルストレージへの保存
                             try {
                                 localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
                                 console.log("ローカルストレージにデータを保存しました");
@@ -1449,7 +1478,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 console.error('ローカルストレージへの保存に失敗:', e);
                             }
                             
-                            // 2. Cookieへの保存を試みる
+                            // 2. Cookieへの保存
                             try {
                                 setCookie('callStatusData', JSON.stringify(callStatusData), 30);
                                 console.log("Cookieにデータを保存しました");
@@ -1457,7 +1486,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 console.error('Cookieへの保存に失敗:', e);
                             }
                             
-                            // 3. データ属性への保存を試みる
+                            // 3. データ属性への保存
                             try {
                                 document.body.setAttribute('data-call-status', JSON.stringify(callStatusData));
                                 console.log("データ属性にデータを保存しました");
@@ -1465,6 +1494,9 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 console.error('データ属性への保存に失敗:', e);
                             }
                             
+                            return true;
+                        } catch (error) {
+                            console.error('データ保存エラー:', error);
                             return false;
                         }
                     }
@@ -1608,6 +1640,15 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     // 初期化処理
                     async function init() {
                         console.log('架電チェックボックス機能を初期化中...');
+                        
+                        // Firebaseの初期化
+                        const firebaseInitialized = initializeFirebase();
+                        if (firebaseInitialized) {
+                            console.log('Firebase初期化成功');
+                        } else {
+                            console.warn('Firebase初期化失敗 - ローカルストレージのみ使用します');
+                        }
+                        
                         await loadCallStatus();
                         restoreCallStatus();
                         sortItemsByCheckStatus();
