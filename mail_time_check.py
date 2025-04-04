@@ -813,6 +813,36 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                 .restore-btn:hover {{
                     background-color: #218838;
                 }}
+                /* 架電済みチェックボックス関連のスタイル */
+                .call-checkbox {{
+                    margin-right: 5px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                }}
+                .call-checked {{
+                    background-color: #f8f8f8;
+                    border-left: 4px solid #28a745;
+                }}
+                .call-label {{
+                    font-size: 0.85em;
+                    color: #666;
+                    margin-right: 10px;
+                    white-space: nowrap;
+                }}
+                .refresh-btn {{
+                    background-color: #17a2b8;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    margin-left: 5px;
+                }}
+                .refresh-btn:hover {{
+                    background-color: #138496;
+                }}
                 /* ログイン関連のスタイル */
                 #login-overlay {{
                     position: fixed;
@@ -1067,10 +1097,31 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             logger.warning(f"無効な日付: {extracted_day}/{extracted_month}/{extracted_year}, アイテム: {name}")
                             pass
                     
+                    # URL内からIDを抽出
+                    reservation_id = ''
+                    if 'id=' in url:
+                        url_parts = url.split('id=')
+                        if len(url_parts) > 1:
+                            id_parts = url_parts[1].split('&')
+                            if len(id_parts) > 0:
+                                reservation_id = id_parts[0]
+                    
+                    # 特定のカテゴリーにはチェックボックスを表示しない
+                    show_call_checkbox = time_slot not in ["数字付き", "追M", "その他", "対応不要"]
+                    call_checkbox_html = ''
+                    
+                    if show_call_checkbox:
+                        call_checkbox_html = f"""
+                        <div class="call-status">
+                            <span class="call-label">1回架電済み</span>
+                            <input type="checkbox" class="call-checkbox" data-item-id="{item_id}" data-reservation-id="{reservation_id}">
+                        </div>
+                        """
+                    
                     # 強調表示クラスを適用（条件に一致する場合）
                     if is_highlighted:
                         html_content += f"""
-                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                        <div class="person-item" id="item-{item_id}" {responder_attr} data-reservation-id="{reservation_id}">
                             <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                             <div class="person-link">
                                 <a href="{url}" target="_blank" class="{highlight_class}">
@@ -1078,11 +1129,12 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                     {facility} {name}{responder_info}
                                 </a>
                             </div>
+                            {call_checkbox_html}
                         </div>
                         """
                     else:
                         html_content += f"""
-                        <div class="person-item" id="item-{item_id}" {responder_attr}>
+                        <div class="person-item" id="item-{item_id}" {responder_attr} data-reservation-id="{reservation_id}">
                             <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                             <div class="person-link">
                                 <a href="{url}" target="_blank">
@@ -1090,6 +1142,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                     {facility} {name}{responder_info}
                                 </a>
                             </div>
+                            {call_checkbox_html}
                         </div>
                         """
             else:
@@ -1190,10 +1243,35 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // 全て復元ボタン
                     document.getElementById('restore-all').addEventListener('click', function() {
+                        // 通常の項目表示の復元
                         document.querySelectorAll('.person-item').forEach(item => {
                             item.style.display = 'flex';
                         });
                         updateSelectedCount();
+                        
+                        // 架電済みチェックボックスのリセット確認
+                        if (confirm('架電済みのチェック状態をすべてリセットしますか？')) {
+                            callStatusData = {};
+                            localStorage.removeItem('callStatusData');
+                            document.cookie = 'callStatusData=; Max-Age=-99999999;';
+                            document.body.removeAttribute('data-call-status');
+                            
+                            document.querySelectorAll('.call-checkbox').forEach(checkbox => {
+                                checkbox.checked = false;
+                                const personItem = checkbox.closest('.person-item');
+                                if (personItem) {
+                                    personItem.classList.remove('call-checked');
+                                }
+                            });
+                            
+                            // サーバーに空のデータを保存
+                            saveCallStatus();
+                            
+                            // 項目を再ソート
+                            sortItemsByCheckStatus();
+                            
+                            console.log('架電済みチェックボックスをすべてリセットしました');
+                        }
                     });
                     
                     // 時間帯内の選択/削除ボタン
@@ -1266,6 +1344,279 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             });
                         });
                     }
+                    
+                    // ====== 架電済みチェックボックス機能 ======
+                    let callStatusData = {};
+                    
+                    // PHPサーバーからのデータ読み込み関数
+                    async function loadCallStatus() {
+                        try {
+                            console.log("サーバーからデータ読み込みを試行中...");
+                            const response = await fetch('check_status.php');
+                            if (response.ok) {
+                                const data = await response.json();
+                                console.log("サーバーからデータを正常に読み込みました");
+                                callStatusData = data;
+                                // ローカルストレージにもバックアップとして保存
+                                localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
+                                return true;
+                            } else {
+                                console.error('サーバーからのデータ読み込みに失敗しました', response.status);
+                                throw new Error('Server response was not OK');
+                            }
+                        } catch (error) {
+                            console.error('データ読み込みエラー:', error);
+                            console.log("ローカルストレージからのデータ復元を試みます");
+                            
+                            // 1. ローカルストレージからの読み込みを試みる
+                            const savedData = localStorage.getItem('callStatusData');
+                            if (savedData) {
+                                try {
+                                    callStatusData = JSON.parse(savedData);
+                                    console.log("ローカルストレージからデータを復元しました");
+                                    return true;
+                                } catch (e) {
+                                    console.error('ローカルストレージからの復元に失敗:', e);
+                                }
+                            }
+                            
+                            // 2. Cookieからの読み込みを試みる
+                            const cookieData = getCookie('callStatusData');
+                            if (cookieData) {
+                                try {
+                                    callStatusData = JSON.parse(cookieData);
+                                    console.log("Cookieからデータを復元しました");
+                                    return true;
+                                } catch (e) {
+                                    console.error('Cookieからの復元に失敗:', e);
+                                }
+                            }
+                            
+                            // 3. データ属性からの読み込みを試みる
+                            const dataAttribute = document.body.getAttribute('data-call-status');
+                            if (dataAttribute) {
+                                try {
+                                    callStatusData = JSON.parse(dataAttribute);
+                                    console.log("データ属性からデータを復元しました");
+                                    return true;
+                                } catch (e) {
+                                    console.error('データ属性からの復元に失敗:', e);
+                                }
+                            }
+                            
+                            // すべての復元方法が失敗した場合は空のオブジェクトを設定
+                            callStatusData = {};
+                            console.log("データの復元に失敗しました。空のデータで初期化します");
+                            return false;
+                        }
+                    }
+                    
+                    // サーバーにデータを保存する関数
+                    async function saveCallStatus() {
+                        try {
+                            console.log("サーバーにデータ保存を試行中...");
+                            const response = await fetch('save_status.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(callStatusData)
+                            });
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                console.log("サーバーにデータを正常に保存しました", result);
+                                // バックアップとしてローカルストレージにも保存
+                                localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
+                                // Cookieにも保存
+                                setCookie('callStatusData', JSON.stringify(callStatusData), 30);
+                                // データ属性にも保存
+                                document.body.setAttribute('data-call-status', JSON.stringify(callStatusData));
+                                return true;
+                            } else {
+                                console.error('サーバーへのデータ保存に失敗しました', response.status);
+                                throw new Error('Server response was not OK');
+                            }
+                        } catch (error) {
+                            console.error('データ保存エラー:', error);
+                            console.log("代替保存方法を試みます");
+                            
+                            // 1. ローカルストレージへの保存を試みる
+                            try {
+                                localStorage.setItem('callStatusData', JSON.stringify(callStatusData));
+                                console.log("ローカルストレージにデータを保存しました");
+                            } catch (e) {
+                                console.error('ローカルストレージへの保存に失敗:', e);
+                            }
+                            
+                            // 2. Cookieへの保存を試みる
+                            try {
+                                setCookie('callStatusData', JSON.stringify(callStatusData), 30);
+                                console.log("Cookieにデータを保存しました");
+                            } catch (e) {
+                                console.error('Cookieへの保存に失敗:', e);
+                            }
+                            
+                            // 3. データ属性への保存を試みる
+                            try {
+                                document.body.setAttribute('data-call-status', JSON.stringify(callStatusData));
+                                console.log("データ属性にデータを保存しました");
+                            } catch (e) {
+                                console.error('データ属性への保存に失敗:', e);
+                            }
+                            
+                            return false;
+                        }
+                    }
+                    
+                    // Cookie操作用のヘルパー関数
+                    function setCookie(name, value, days) {
+                        const expires = new Date();
+                        expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+                        document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/';
+                    }
+                    
+                    function getCookie(name) {
+                        const nameEQ = name + '=';
+                        const ca = document.cookie.split(';');
+                        for (let i = 0; i < ca.length; i++) {
+                            let c = ca[i];
+                            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                            if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+                        }
+                        return null;
+                    }
+                    
+                    // チェックボックスの状態を復元する関数
+                    function restoreCallStatus() {
+                        document.querySelectorAll('.call-checkbox').forEach(checkbox => {
+                            const reservationId = checkbox.getAttribute('data-reservation-id');
+                            if (reservationId && callStatusData[reservationId]) {
+                                checkbox.checked = true;
+                                const personItem = checkbox.closest('.person-item');
+                                if (personItem) {
+                                    personItem.classList.add('call-checked');
+                                }
+                            }
+                        });
+                    }
+                    
+                    // チェックボックスの状態に基づいて項目をソートする関数
+                    function sortItemsByCheckStatus() {
+                        console.log("チェック状態によるソートを実行します");
+                        document.querySelectorAll('.time-slot').forEach(slot => {
+                            // 数字付き、追M、その他、対応不要の場合はソートしない
+                            const slotId = slot.id.replace('slot-', '');
+                            if (['数字付き', '追M', 'その他', '対応不要'].includes(slotId)) {
+                                console.log(`スロット '${slotId}' はソート対象外です`);
+                                return;
+                            }
+                            
+                            const items = Array.from(slot.querySelectorAll('.person-item'));
+                            const container = slot.querySelector('.slot-items');
+                            
+                            if (items.length > 0 && container) {
+                                console.log(`スロット '${slotId}' をソートします: ${items.length}件`);
+                                
+                                // チェック状態でソート（未チェックを先に）
+                                items.sort((a, b) => {
+                                    const aChecked = a.classList.contains('call-checked') ? 1 : 0;
+                                    const bChecked = b.classList.contains('call-checked') ? 1 : 0;
+                                    return aChecked - bChecked;
+                                });
+                                
+                                // ソート後の要素を再配置
+                                items.forEach(item => container.appendChild(item));
+                                console.log(`スロット '${slotId}' のソートが完了しました`);
+                            }
+                        });
+                    }
+                    
+                    // チェックボックスのイベントリスナー設定
+                    document.addEventListener('change', function(e) {
+                        if (e.target.classList.contains('call-checkbox')) {
+                            const reservationId = e.target.getAttribute('data-reservation-id');
+                            const personItem = e.target.closest('.person-item');
+                            
+                            if (e.target.checked) {
+                                // チェックが入った場合
+                                if (reservationId) {
+                                    callStatusData[reservationId] = true;
+                                    console.log(`ID:${reservationId} をチェック済みに設定`);
+                                }
+                                if (personItem) {
+                                    personItem.classList.add('call-checked');
+                                }
+                            } else {
+                                // チェックが外れた場合
+                                if (reservationId && callStatusData[reservationId]) {
+                                    delete callStatusData[reservationId];
+                                    console.log(`ID:${reservationId} のチェックを解除`);
+                                }
+                                if (personItem) {
+                                    personItem.classList.remove('call-checked');
+                                }
+                            }
+                            
+                            // 更新されたデータを保存
+                            saveCallStatus();
+                        }
+                    });
+                    
+                    // 更新ボタンをスロットごとに追加
+                    document.querySelectorAll('.time-title').forEach(title => {
+                        if (title.querySelector('.action-buttons')) {
+                            const slotId = title.closest('.time-slot').id.replace('slot-', '');
+                            
+                            // 数字付き、追M、その他、対応不要のスロットでは更新ボタンを追加しない
+                            if (['数字付き', '追M', 'その他', '対応不要'].includes(slotId)) {
+                                return;
+                            }
+                            
+                            const refreshBtn = document.createElement('button');
+                            refreshBtn.className = 'refresh-btn';
+                            refreshBtn.setAttribute('data-slot', slotId);
+                            refreshBtn.textContent = '更新';
+                            
+                            title.querySelector('.action-buttons').appendChild(refreshBtn);
+                            
+                            // 更新ボタンのイベントリスナー
+                            refreshBtn.addEventListener('click', function() {
+                                sortItemsByCheckStatus();
+                            });
+                        }
+                    });
+                    
+                    // 自動保存タイマー（10秒ごとに保存）
+                    let autoSaveInterval;
+                    
+                    function startAutoSave() {
+                        // 既存のタイマーをクリア
+                        if (autoSaveInterval) {
+                            clearInterval(autoSaveInterval);
+                        }
+                        
+                        // 10秒ごとに自動保存
+                        autoSaveInterval = setInterval(() => {
+                            if (Object.keys(callStatusData).length > 0) {
+                                console.log('自動保存を実行します');
+                                saveCallStatus();
+                            }
+                        }, 10000); // 10秒
+                    }
+                    
+                    // 初期化処理
+                    async function init() {
+                        console.log('架電チェックボックス機能を初期化中...');
+                        await loadCallStatus();
+                        restoreCallStatus();
+                        sortItemsByCheckStatus();
+                        startAutoSave();
+                        console.log('架電チェックボックス機能の初期化が完了しました');
+                    }
+                    
+                    // アプリケーション初期化
+                    init();
                 });
             </script>
         </body>

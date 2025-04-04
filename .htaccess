@@ -1,0 +1,51 @@
+# PHPを有効化する（共有サーバーなど一部の環境で必要）
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+
+# PHPファイルの処理を許可
+AddType application/x-httpd-php .php
+
+# CORSを有効化する
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+    
+    # OPTIONSリクエストに対しては200を返す
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header set Status "200 OK"
+    </If>
+</IfModule>
+
+# ディレクトリ一覧の表示を無効化
+Options -Indexes
+
+# データディレクトリへのアクセスを制限
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^data/.*$ - [F,L]
+</IfModule>
+
+# PHPエラー表示を本番環境では無効に
+php_flag display_errors off
+
+# JSONファイルにアクセス許可
+<FilesMatch "\.json$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# キャッシュの無効化
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 0 seconds"
+</IfModule>
+
+# Netlify環境でのJSONファイル処理
+<Files "call_status.json">
+    ForceType application/json
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</Files> 
