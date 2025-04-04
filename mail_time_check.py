@@ -1127,7 +1127,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     if show_call_checkbox:
                         call_checkbox_html = f"""
                         <div class="call-status">
-                            <span class="call-label">1回架電済み</span>
+                            <span class="call-label">本日架電済み</span>
                             <input type="checkbox" class="call-checkbox" data-item-id="{item_id}" data-reservation-id="{reservation_id}">
                         </div>
                         """
@@ -1568,33 +1568,25 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // チェックボックスの状態に基づいて項目をソートする関数
                     function sortItemsByCheckStatus() {
-                        console.log("チェック状態によるソートを実行します");
                         document.querySelectorAll('.time-slot').forEach(slot => {
-                            // 数字付き、追M、その他、対応不要の場合はソートしない
-                            const slotId = slot.id.replace('slot-', '');
-                            if (['数字付き', '追M', 'その他', '対応不要'].includes(slotId)) {
-                                console.log(`スロット '${slotId}' はソート対象外です`);
-                                return;
-                            }
-                            
                             const items = Array.from(slot.querySelectorAll('.person-item'));
-                            const container = slot.querySelector('.slot-items');
+                            const slotItems = slot.querySelector('.slot-items');
                             
-                            if (items.length > 0 && container) {
-                                console.log(`スロット '${slotId}' をソートします: ${items.length}件`);
-                                
-                                // チェック状態でソート（未チェックを先に）
-                                items.sort((a, b) => {
-                                    const aChecked = a.classList.contains('call-checked') ? 1 : 0;
-                                    const bChecked = b.classList.contains('call-checked') ? 1 : 0;
-                                    return aChecked - bChecked;
-                                });
-                                
-                                // ソート後の要素を再配置
-                                items.forEach(item => container.appendChild(item));
-                                console.log(`スロット '${slotId}' のソートが完了しました`);
-                            }
+                            // チェック状態に基づいてソート
+                            items.sort((a, b) => {
+                                const aChecked = a.querySelector('.call-checkbox').checked;
+                                const bChecked = b.querySelector('.call-checkbox').checked;
+                                return bChecked - aChecked;
+                            });
+                            
+                            // ソートされた項目を再配置
+                            items.forEach(item => {
+                                slotItems.appendChild(item);
+                            });
                         });
+                        
+                        // ソート後にチェックボックスの状態を復元
+                        restoreCallStatus();
                     }
                     
                     // チェックボックスのイベントリスナー設定
