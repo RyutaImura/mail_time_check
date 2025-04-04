@@ -1354,12 +1354,12 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     
                     // Firebase設定
                     const firebaseConfig = {
-                        apiKey: "AIzaSyDFdhYG6WA-6Cn9TTSPbgZ8GnJ4l4J-suk",
+                        apiKey: "AIzaSyB2-506S8Y2WhiJsJTBRwJKsS4X_nS5FBI",
                         authDomain: "call-status-checker.firebaseapp.com",
                         projectId: "call-status-checker",
-                        storageBucket: "call-status-checker.appspot.com",
-                        messagingSenderId: "810881916703",
-                        appId: "1:810881916703:web:a1e5d7f3dcede8172bed4c"
+                        storageBucket: "call-status-checker.firebasestorage.app",
+                        messagingSenderId: "253424772443",
+                        appId: "1:253424772443:web:cd78663d4448d8aca2a67e"
                     };
                     
                     // Firebaseの初期化
