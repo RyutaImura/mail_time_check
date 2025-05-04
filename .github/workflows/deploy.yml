@@ -57,13 +57,34 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
           
+      - name: Create public directory
+        run: |
+          echo "publicディレクトリを作成します"
+          mkdir -p public
+          echo "<html><body><h1>初期ページ</h1><p>スクレイピング処理実行中...</p></body></html>" > public/index.html
+          echo "publicディレクトリを作成しました"
+          
       - name: Run mail_time_check.py
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
           LOGIN_URL: ${{ secrets.LOGIN_URL }}
           SCRAPING_USERNAME: ${{ secrets.SCRAPING_USERNAME }}
           SCRAPING_PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
+          GITHUB_ACTIONS: 'true'  # 明示的にGITHUB_ACTIONS環境変数を設定
         run: python mail_time_check.py
+        
+      - name: Check generated HTML
+        run: |
+          echo "生成されたHTMLファイルを確認します"
+          if [ -f "public/index.html" ]; then
+            echo "public/index.html が存在します"
+            filesize=$(stat -c%s "public/index.html")
+            echo "ファイルサイズ: $filesize バイト"
+            head -n 10 public/index.html
+          else
+            echo "警告: public/index.html が見つかりません"
+            ls -la public/
+          fi
         
       - name: Deploy to Netlify
         env:
