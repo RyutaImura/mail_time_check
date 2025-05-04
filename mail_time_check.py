@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -73,6 +73,9 @@ if not all([BASE_URL, LOGIN_URL, USERNAME, PASSWORD]):
 
 # 日本のタイムゾーンを設定
 JST = pytz.timezone('Asia/Tokyo')
+
+# 日本語の曜日名マッピング
+WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 
 def is_github_actions():
     """
@@ -363,6 +366,25 @@ def extract_mail_data(driver, target_year, target_month):
                 link = element.find_element(By.TAG_NAME, "a")
                 href = link.get_attribute("href")
                 
+                # URLから日付情報を抽出（yyyy-mm-dd形式）
+                date_match = re.search(r'(\d{4}-\d{2}-\d{2})', href)
+                date_str = date_match.group(1) if date_match else None
+                
+                # 曜日情報を計算
+                weekday = None
+                if date_str:
+                    try:
+                        # yyyy-mm-ddをdatetimeオブジェクトに変換
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        # 曜日を取得（0:月曜〜6:日曜）
+                        weekday_num = date_obj.weekday()
+                        # 日本語の曜日に変換
+                        weekday = WEEKDAY_JA[weekday_num]
+                        logger.info(f"日付 {date_str} の曜日: {weekday}")
+                    except Exception as e:
+                        logger.error(f"曜日計算中にエラー: {str(e)}")
+                        weekday = None
+                
                 # テキスト内容を取得
                 text_content = element.text
                 
@@ -407,6 +429,18 @@ def extract_mail_data(driver, target_year, target_month):
                     month_match = re.search(r'(\d+)月', text_content)
                     mail_month = int(month_match.group(1)) if month_match else target_month
                     
+                    # 日付情報を追加
+                    if date_str:
+                        try:
+                            # yyyy-mm-ddから各部分を抽出
+                            year_str, month_str, day_str = date_str.split('-')
+                            mail_date = f"{month_str}-{day_str}"  # mm-dd形式
+                        except Exception as e:
+                            logger.error(f"日付形式の解析エラー: {str(e)}")
+                            mail_date = None
+                    else:
+                        mail_date = None
+                    
                     if has_追:
                         # 「追」を含む名前のデータを追加
                         logger.info(f"「追」を含む名前: {name_part}")
@@ -414,7 +448,9 @@ def extract_mail_data(driver, target_year, target_month):
                             "url": href,
                             "facility": facility,
                             "name": name_part.strip(),
-                            "mail_month": mail_month
+                            "mail_month": mail_month,
+                            "mail_date": mail_date,
+                            "weekday": weekday
                         })
                         logger.info(f"「追」を含む名前を別リストに追加しました: {name_part}")
                         continue
@@ -425,7 +461,9 @@ def extract_mail_data(driver, target_year, target_month):
                             "url": href,
                             "facility": facility,
                             "name": name_part.strip(),
-                            "mail_month": mail_month
+                            "mail_month": mail_month,
+                            "mail_date": mail_date,
+                            "weekday": weekday
                         })
                         logger.info(f"「0」のみを含む名前を「対応不要」リストに追加しました: {name_part}")
                         continue
@@ -474,6 +512,8 @@ def extract_mail_data(driver, target_year, target_month):
                             "name": name_part.strip(),
                             "extracted_number": extracted_number,
                             "mail_month": mail_month,
+                            "mail_date": mail_date,
+                            "weekday": weekday,
                             "responder": responder_name  # 対応者情報を追加
                         })
                         logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month}, 対応者: {responder_name})")
@@ -487,7 +527,9 @@ def extract_mail_data(driver, target_year, target_month):
                         "url": href,
                         "facility": facility,
                         "name": clean_name,
-                        "mail_month": mail_month
+                        "mail_month": mail_month,
+                        "mail_date": mail_date,
+                        "weekday": weekday
                     })
                     
                     # 結果を表示
@@ -792,6 +834,8 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     padding: 2px 6px;
                     margin-right: 8px;
                     font-size: 0.8em;
+                    min-width: 60px;
+                    text-align: center;
                 }}
                 .controls {{
                     margin-bottom: 20px;
@@ -1057,6 +1101,18 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     name = item['name']
                     url = item['url']
                     month = item.get('month', '')
+                    mail_date = item.get('mail_date')  # 日付情報を取得
+                    weekday = item.get('weekday')  # 曜日情報を取得
+                    
+                    # 月表示のバッジテキストを決定（日付情報があれば優先）
+                    if mail_date:
+                        if weekday:
+                            month_badge_text = f"{mail_date}({weekday})"  # mm-dd(曜)形式
+                        else:
+                            month_badge_text = mail_date  # mm-dd形式
+                    else:
+                        month_badge_text = f"{month}月"
+                        
                     item_id = f"{slot_id}_{i}"
                     
                     # 対応者情報を取得（数字付きの場合のみ）
@@ -1139,7 +1195,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                             <div class="person-link">
                                 <a href="{url}" target="_blank" class="{highlight_class}">
-                                    <span class="month-badge">{month}月</span>
+                                    <span class="month-badge">{month_badge_text}</span>
                                     {facility} {name}{responder_info}
                                 </a>
                             </div>
@@ -1152,7 +1208,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <input type="checkbox" class="checkbox" id="check-{item_id}" data-item-id="{item_id}">
                             <div class="person-link">
                                 <a href="{url}" target="_blank">
-                                    <span class="month-badge">{month}月</span>
+                                    <span class="month-badge">{month_badge_text}</span>
                                     {facility} {name}{responder_info}
                                 </a>
                             </div>
