@@ -582,6 +582,16 @@ def extract_contact_time(driver, url):
         logger.info(f"URLにアクセスしました: {url}")
         time.sleep(2)  # ページの読み込みを待機
         
+        # 近似データの有無をチェック
+        has_approximation_data = False
+        try:
+            approximation_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '近似データ')]")
+            has_approximation_data = len(approximation_elements) > 0
+            if has_approximation_data:
+                logger.info(f"近似データが見つかりました: {url}")
+        except Exception as e:
+            logger.error(f"近似データのチェック中にエラー: {str(e)}")
+        
         # 受電内容を含む行を探す
         try:
             wait = WebDriverWait(driver, 10)
@@ -619,25 +629,25 @@ def extract_contact_time(driver, url):
                 for pattern in time_patterns:
                     if pattern in contact_time_full:
                         logger.info(f"連絡可能時間のパターンに一致: {pattern}")
-                        return pattern
+                        return pattern, has_approximation_data
                 
                 # パターンに一致しない場合は全体を返す
                 logger.info(f"連絡可能時間のパターンに一致しませんでした。全体を返します: {contact_time_full}")
-                return contact_time_full
+                return contact_time_full, has_approximation_data
             else:
                 logger.warning("連絡可能時間が見つかりませんでした")
-                return "不明"
+                return "不明", has_approximation_data
                 
         except TimeoutException:
             logger.error("受電内容の要素が見つかりませんでした")
-            return "不明"
+            return "不明", has_approximation_data
         except Exception as e:
             logger.error(f"連絡可能時間の抽出中にエラーが発生: {str(e)}")
-            return "不明"
+            return "不明", has_approximation_data
             
     except Exception as e:
         logger.error(f"連絡可能時間の抽出処理中にエラーが発生: {str(e)}")
-        return "不明"
+        return "不明", False
 
 def current_time_jst():
     """日本時間の現在時刻を返す"""
@@ -1004,6 +1014,30 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         text-shadow: 0 0 3px red;
                     }}
                 }}
+                /* 追加: 近似データバッジのスタイル */
+                .approximation-badge {{
+                    display: inline-block;
+                    background-color: #ff4500;
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    margin-left: 8px;
+                    font-size: 0.8em;
+                    font-weight: bold;
+                    animation: pulse 2s infinite;
+                }}
+                
+                @keyframes pulse {{
+                    0% {{
+                        opacity: 1;
+                    }}
+                    50% {{
+                        opacity: 0.7;
+                    }}
+                    100% {{
+                        opacity: 1;
+                    }}
+                }}
             </style>
         </head>
         <body>
@@ -1188,6 +1222,11 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                         </div>
                         """
                     
+                    # 近似データバッジの表示
+                    approximation_badge = ""
+                    if item.get('has_approximation_data', False):
+                        approximation_badge = '<span class="approximation-badge">【近似D有】</span>'
+                    
                     # 強調表示クラスを適用（条件に一致する場合）
                     if is_highlighted:
                         html_content += f"""
@@ -1196,7 +1235,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <div class="person-link">
                                 <a href="{url}" target="_blank" class="{highlight_class}">
                                     <span class="month-badge">{month_badge_text}</span>
-                                    {facility} {name}{responder_info}
+                                    {facility} {name}{responder_info}{approximation_badge}
                                 </a>
                             </div>
                             {call_checkbox_html}
@@ -1209,7 +1248,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                             <div class="person-link">
                                 <a href="{url}" target="_blank">
                                     <span class="month-badge">{month_badge_text}</span>
-                                    {facility} {name}{responder_info}
+                                    {facility} {name}{responder_info}{approximation_badge}
                                 </a>
                             </div>
                             {call_checkbox_html}
@@ -1848,8 +1887,9 @@ def main():
             # 通常の予約データの連絡可能時間を抽出
             for j, data in enumerate(extracted_data, 1):
                 print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
-                contact_time = extract_contact_time(driver, data['url'])
+                contact_time, has_approximation_data = extract_contact_time(driver, data['url'])
                 data['contact_time'] = contact_time
+                data['has_approximation_data'] = has_approximation_data
                 
                 # 年月情報を追加
                 data['year'] = target_year
@@ -1860,6 +1900,8 @@ def main():
                 print(f"施設: {data['facility']}")
                 print(f"名前: {data['name']}")
                 print(f"連絡可能時間: {contact_time}")
+                if has_approximation_data:
+                    print(f"近似データ: あり")
                 print("-" * 50)
             
             # 数字付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
