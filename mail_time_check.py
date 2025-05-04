@@ -498,6 +498,17 @@ def extract_mail_data(driver, target_year, target_month):
                                 logger.error(f"対応者の取得中にエラー: {str(e)}")
                                 responder_name = ''
                             
+                            # 近似データの有無を確認
+                            has_approximation_data = False
+                            try:
+                                approximation_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '近似データ')]")
+                                has_approximation_data = len(approximation_elements) > 0
+                                if has_approximation_data:
+                                    logger.info(f"{name_part}の近似データが見つかりました")
+                            except Exception as e:
+                                logger.error(f"近似データの確認中にエラー: {str(e)}")
+                                has_approximation_data = False
+                            
                             # タブを閉じて元のタブに戻る
                             driver.close()
                             driver.switch_to.window(driver.window_handles[0])
@@ -505,6 +516,7 @@ def extract_mail_data(driver, target_year, target_month):
                         except Exception as e:
                             logger.error(f"対応者情報の取得中にエラー: {str(e)}")
                             responder_name = ''
+                            has_approximation_data = False
                         
                         number_name_data.append({
                             "url": href,
@@ -514,9 +526,10 @@ def extract_mail_data(driver, target_year, target_month):
                             "mail_month": mail_month,
                             "mail_date": mail_date,
                             "weekday": weekday,
-                            "responder": responder_name  # 対応者情報を追加
+                            "responder": responder_name,  # 対応者情報を追加
+                            "has_approximation_data": has_approximation_data  # 近似データの有無を追加
                         })
-                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month}, 対応者: {responder_name})")
+                        logger.info(f"数字を含む名前を別リストに追加しました: {name_part} (抽出数字: {extracted_number}, 月: {mail_month}, 対応者: {responder_name}, 近似データ: {'あり' if has_approximation_data else 'なし'})")
                         continue
                     
                     # 名前を整形（空白や「様」を削除）
@@ -575,12 +588,25 @@ def extract_mail_data(driver, target_year, target_month):
 def extract_contact_time(driver, url):
     """
     指定されたURLから連絡可能時間を抽出します
+    さらに、近似データの有無も確認します
     """
     try:
         # URLにアクセス
         driver.get(url)
         logger.info(f"URLにアクセスしました: {url}")
         time.sleep(2)  # ページの読み込みを待機
+        
+        # 近似データの有無を確認
+        has_approximation_data = False
+        try:
+            # 近似データの有無を確認する
+            approximation_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '近似データ')]")
+            has_approximation_data = len(approximation_elements) > 0
+            if has_approximation_data:
+                logger.info("近似データが見つかりました")
+        except Exception as e:
+            logger.error(f"近似データの確認中にエラー: {str(e)}")
+            has_approximation_data = False
         
         # 受電内容を含む行を探す
         try:
@@ -619,25 +645,25 @@ def extract_contact_time(driver, url):
                 for pattern in time_patterns:
                     if pattern in contact_time_full:
                         logger.info(f"連絡可能時間のパターンに一致: {pattern}")
-                        return pattern
+                        return pattern, has_approximation_data
                 
                 # パターンに一致しない場合は全体を返す
                 logger.info(f"連絡可能時間のパターンに一致しませんでした。全体を返します: {contact_time_full}")
-                return contact_time_full
+                return contact_time_full, has_approximation_data
             else:
                 logger.warning("連絡可能時間が見つかりませんでした")
-                return "不明"
+                return "不明", has_approximation_data
                 
         except TimeoutException:
             logger.error("受電内容の要素が見つかりませんでした")
-            return "不明"
+            return "不明", has_approximation_data
         except Exception as e:
             logger.error(f"連絡可能時間の抽出中にエラーが発生: {str(e)}")
-            return "不明"
+            return "不明", has_approximation_data
             
     except Exception as e:
         logger.error(f"連絡可能時間の抽出処理中にエラーが発生: {str(e)}")
-        return "不明"
+        return "不明", False
 
 def current_time_jst():
     """日本時間の現在時刻を返す"""
@@ -837,6 +863,22 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     min-width: 60px;
                     text-align: center;
                 }}
+                .approximation-data-badge {{
+                    display: inline-block;
+                    background-color: #ff4500;
+                    color: white;
+                    border-radius: 3px;
+                    padding: 2px 6px;
+                    margin-left: 8px;
+                    font-size: 0.8em;
+                    font-weight: bold;
+                    animation: pulse 1.5s ease-in-out infinite;
+                }}
+                @keyframes pulse {{
+                    0% {{ background-color: #ff4500; }}
+                    50% {{ background-color: #ff6347; }}
+                    100% {{ background-color: #ff4500; }}
+                }}
                 .controls {{
                     margin-bottom: 20px;
                     background-color: #f8f9fa;
@@ -982,6 +1024,16 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                     padding: 5px;
                     border-radius: 3px;
                     border: 1px solid #ddd;
+                }}
+                a.approximation-data-badge {{
+                    display: inline-block;
+                    background-color: #ff4500;
+                    color: white;
+                    border-radius: 3px;
+                    padding: 2px 6px;
+                    margin-left: 8px;
+                    font-size: 0.8em;
+                    font-weight: bold;
                 }}
                 /* 追加: 赤色点滅エフェクト */
                 .flashy-blink {{
@@ -1197,6 +1249,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 <a href="{url}" target="_blank" class="{highlight_class}">
                                     <span class="month-badge">{month_badge_text}</span>
                                     {facility} {name}{responder_info}
+                                    {item.get('has_approximation_data') and '<span class="approximation-data-badge">【近似D有】</span>' or ''}
                                 </a>
                             </div>
                             {call_checkbox_html}
@@ -1210,6 +1263,7 @@ def generate_html_report(data_list, start_year, start_month, number_name_data=No
                                 <a href="{url}" target="_blank">
                                     <span class="month-badge">{month_badge_text}</span>
                                     {facility} {name}{responder_info}
+                                    {item.get('has_approximation_data') and '<span class="approximation-data-badge">【近似D有】</span>' or ''}
                                 </a>
                             </div>
                             {call_checkbox_html}
@@ -1848,8 +1902,11 @@ def main():
             # 通常の予約データの連絡可能時間を抽出
             for j, data in enumerate(extracted_data, 1):
                 print(f"\n{j}. {data['name']}の連絡可能時間を抽出中...")
-                contact_time = extract_contact_time(driver, data['url'])
+                
+                # URLにアクセスして連絡可能時間と近似データの有無を抽出
+                contact_time, has_approximation_data = extract_contact_time(driver, data['url'])
                 data['contact_time'] = contact_time
+                data['has_approximation_data'] = has_approximation_data
                 
                 # 年月情報を追加
                 data['year'] = target_year
@@ -1860,6 +1917,7 @@ def main():
                 print(f"施設: {data['facility']}")
                 print(f"名前: {data['name']}")
                 print(f"連絡可能時間: {contact_time}")
+                print(f"近似データの有無: {'あり' if has_approximation_data else 'なし'}")
                 print("-" * 50)
             
             # 数字付きの予約データには連絡可能時間を抽出せず、年月情報のみ追加
@@ -1884,6 +1942,8 @@ def main():
                     data['month'] = target_month
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
                     data['contact_time'] = "記載無し"
+                    # 近似データは確認しない（デフォルト値を設定）
+                    data['has_approximation_data'] = False
                 
                 logger.info(f"追M付き予約データ {len(追m_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
@@ -1895,6 +1955,8 @@ def main():
                     data['month'] = target_month
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
                     data['contact_time'] = "記載無し"
+                    # 近似データは確認しない（デフォルト値を設定）
+                    data['has_approximation_data'] = False
                 
                 logger.info(f"「0」のみ付き予約データ（対応不要） {len(zero_name_data)}件の処理をスキップしました（連絡可能時間の抽出なし）")
             
