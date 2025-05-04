@@ -1912,6 +1912,12 @@ def main():
                     data['month'] = target_month
                     # 連絡可能時間は抽出しない（デフォルト値を設定）
                     data['contact_time'] = "記載無し"
+                    
+                    # 近似データの有無をチェック
+                    _, has_approximation_data = extract_contact_time(driver, data['url'])
+                    data['has_approximation_data'] = has_approximation_data
+                    if has_approximation_data:
+                        logger.info(f"数字付きデータに近似データを検出: {data['name']}")
                 
                 # 抽出した数字でソートしたデータをログに出力
                 sorted_data = sorted(number_name_data, key=lambda x: x.get('extracted_number', 999))
