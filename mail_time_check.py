@@ -94,9 +94,9 @@ def get_output_path(filename):
     環境に応じて適切な出力パスを返す
     """
     if is_github_actions():
-        # GitHub Actions環境では、publicディレクトリに出力
-        output_dir = 'public'
-        # publicディレクトリが存在しない場合は作成
+        # GitHub Actions環境では、指定された出力ディレクトリかpublicディレクトリに出力
+        output_dir = os.getenv('OUTPUT_DIR', 'public')
+        # 出力ディレクトリが存在しない場合は作成
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             logger.info(f"出力ディレクトリを作成しました: {output_dir}")

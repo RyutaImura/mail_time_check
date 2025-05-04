@@ -59,10 +59,9 @@ jobs:
           
       - name: Create public directory
         run: |
-          echo "publicディレクトリを作成します"
-          mkdir -p public
-          echo "<html><body><h1>初期ページ</h1><p>スクレイピング処理実行中...</p></body></html>" > public/index.html
-          echo "publicディレクトリを作成しました"
+          echo "作業用ディレクトリを作成します"
+          mkdir -p build_temp
+          echo "作業用ディレクトリを作成しました"
           
       - name: Run mail_time_check.py
         env:
@@ -71,19 +70,27 @@ jobs:
           SCRAPING_USERNAME: ${{ secrets.SCRAPING_USERNAME }}
           SCRAPING_PASSWORD: ${{ secrets.SCRAPING_PASSWORD }}
           GITHUB_ACTIONS: 'true'  # 明示的にGITHUB_ACTIONS環境変数を設定
+          OUTPUT_DIR: 'build_temp'  # 出力先ディレクトリを指定
         run: python mail_time_check.py
         
       - name: Check generated HTML
         run: |
           echo "生成されたHTMLファイルを確認します"
-          if [ -f "public/index.html" ]; then
-            echo "public/index.html が存在します"
-            filesize=$(stat -c%s "public/index.html")
+          if [ -f "build_temp/index.html" ]; then
+            echo "build_temp/index.html が存在します"
+            filesize=$(stat -c%s "build_temp/index.html")
             echo "ファイルサイズ: $filesize バイト"
-            head -n 10 public/index.html
+            head -n 10 build_temp/index.html
+            
+            # 成功したら公開ディレクトリに移動
+            echo "公開ディレクトリを準備します"
+            mkdir -p public
+            cp build_temp/index.html public/
+            echo "HTMLファイルを公開ディレクトリにコピーしました"
           else
-            echo "警告: public/index.html が見つかりません"
-            ls -la public/
+            echo "警告: build_temp/index.html が見つかりません"
+            ls -la build_temp/
+            exit 1  # エラー終了
           fi
         
       - name: Deploy to Netlify
