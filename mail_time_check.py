@@ -414,14 +414,14 @@ def extract_mail_data(driver, target_year, target_month):
                     is_zero_only = bool(re.match(r'^[^0-9]*0[^0-9]*$', family_name))
                     
                     # 施設名を抽出（共通処理）
-                    facility_pattern = r'mail\.gif">([^\d]*(院|宇都宮|心斎橋|高松|博多|天神)[^\d]*?)(\d{1,2}:\d{2})'
+                    facility_pattern = r'mail\.gif">([^\d]*(院|宇都宮|心斎橋|高松|博多|天神|上野|京都)[^\d]*?)(\d{1,2}:\d{2})'
                     facility_match = re.search(facility_pattern, html_content)
                     
                     if facility_match:
                         facility = facility_match.group(1).strip()
                     else:
                         # 別の方法で施設名を抽出を試みる
-                        facility_pattern2 = r'([^\s]+院|宇都宮|心斎橋|高松|博多|天神)[\d:]+' 
+                        facility_pattern2 = r'([^\s]+院|宇都宮|心斎橋|高松|博多|天神|上野|京都)[\d:]+' 
                         facility_match2 = re.search(facility_pattern2, text_content)
                         facility = facility_match2.group(1) if facility_match2 else "不明"
                     
